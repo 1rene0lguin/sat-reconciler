@@ -2,11 +2,6 @@ package sat
 
 import "time"
 
-const (
-	soapActionDescarga = "http://DescargaMasivaTerceros.sat.gob.mx/IDescargaMasivaTercerosService/Descargar"
-	urlDescarga        = "https://cfdidescargamasivasolicitud.clouda.sat.gob.mx/DescargaMasivaService.svc"
-)
-
 type DownloadResponseEnvelope struct {
 	Body DownloadResponseBody `xml:"Body"`
 }

@@ -1,4 +1,4 @@
-package sat // <--- CAMBIO IMPORTANTE: Debe coincidir con request_builder.go
+package sat
 
 import (
 	"bytes"
@@ -8,12 +8,74 @@ import (
 	"io"
 	"net/http"
 
-	// Asegúrate de que este import apunte a TU repo y carpeta correcta
 	"github.com/i4ene0lguin/sat-reconcilier/internal/core/domain"
 )
 
+const (
+	urlDescarga        = "https://cfdidescargamasiva.clouda.sat.gob.mx/PeticionDescargaMasivaService.svc"
+	soapActionDescarga = "http://DescargaMasivaTerceros.sat.gob.mx/IPeticionDescargaMasivaService/PeticionDescargaMasiva"
+
+	headerContentType = "Content-Type"
+	headerAuth        = "Authorization"
+	mimeTypeXML       = "text/xml; charset=utf-8"
+	authPrefix        = "WRAP access_token=\""
+	authSuffix        = "\""
+
+	satStatusSuccess = "5000"
+)
+
 type SoapAdapter struct {
-	// Configuración futura (URL, Timeouts, etc.)
+	client *http.Client
+}
+
+func NewSoapAdapter() *SoapAdapter {
+	return &SoapAdapter{
+		client: &http.Client{},
+	}
+}
+
+func (s *SoapAdapter) setHeaders(req *http.Request, token string) {
+	req.Header.Set(headerContentType, mimeTypeXML)
+	req.Header.Set("SOAPAction", soapActionDescarga)
+	req.Header.Set(headerAuth, authPrefix+token+authSuffix)
+}
+
+func (s *SoapAdapter) processDownloadResponse(body io.Reader) ([]byte, error) {
+	respBytes, err := io.ReadAll(body)
+	if err != nil {
+		return nil, fmt.Errorf("reading body error: %w", err)
+	}
+
+	var envelope DownloadResponseEnvelope
+	if err := xml.Unmarshal(respBytes, &envelope); err != nil {
+		return nil, fmt.Errorf("xml parsing error: %w", err)
+	}
+
+	if err := s.validateSatStatus(envelope.Body.Response.Header); err != nil {
+		return nil, err
+	}
+
+	return base64.StdEncoding.DecodeString(envelope.Body.Response.Body.PaqueteBase64)
+}
+
+func (s *SoapAdapter) validateSatStatus(header DownloadHeader) error {
+	if header.CodEstatus != satStatusSuccess {
+		return fmt.Errorf("sat error %s: %s", header.CodEstatus, header.Mensaje)
+	}
+	return nil
+}
+
+// authenticate encapsula la lógica de obtención de token (WRAP).
+// [TODO] Debes implementar esto usando el servicio de Autenticación del SAT [cite: 34]
+func (s *SoapAdapter) authenticate(certPath, keyPath string) (string, error) {
+	// Implementación real pendiente:
+	// 1. Generar SOAP de Autentica
+	// 2. Firmar con certificado
+	// 3. Enviar a https://cfdidescargamasivasolicitud.clouda.sat.gob.mx/Autenticacion/Autenticacion.svc
+	// 4. Retornar el token string
+
+	// Para MVP/Simulación local retornamos un dummy validable
+	return "MOCK_TOKEN_WRAP_ACCESS", nil
 }
 
 type AutenticaResponseEnvelope struct {
@@ -32,18 +94,12 @@ type DescargaResponseEnvelope struct {
 	} `xml:"Body"`
 }
 
-func NewSoapAdapter() *SoapAdapter {
-	return &SoapAdapter{}
-}
-
 func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.VerificationResult, error) {
-	// Como estamos en el mismo package 'sat', podemos llamar a NewRequestBuilder directo
 	rb, err := NewRequestBuilder(keyPath, certPath)
 	if err != nil {
 		return nil, fmt.Errorf("error iniciando builder: %w", err)
 	}
 
-	// Construir XML
 	xmlBytes, err := rb.BuildVerificationRequest(rfc, uuid)
 	if err != nil {
 		return nil, fmt.Errorf("error construyendo request: %w", err)
@@ -53,7 +109,6 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.
 	// Por ahora simulamos una respuesta positiva para el MVP
 	_ = xmlBytes
 
-	// Retornamos un objeto de Dominio (limpio)
 	return &domain.VerificationResult{
 		UUID:    uuid,
 		Status:  domain.StatusInProcess, // Simulamos estado 2
@@ -85,60 +140,34 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string)
 
 	return "UUID-SIMULADO-DESDE-ADAPTER", nil
 }
-
 func (s *SoapAdapter) DownloadPackage(rfc, packageID, certPath, keyPath string) ([]byte, error) {
-	// 1. Preparar Builder
+	token, err := s.authenticate(certPath, keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("authentication failed: %w", err)
+	}
+
 	rb, err := NewRequestBuilder(keyPath, certPath)
 	if err != nil {
-		return nil, fmt.Errorf("error builder: %w", err)
+		return nil, fmt.Errorf("builder initialization error: %w", err)
 	}
 
-	// 2. Construir XML Firmado (Usando tu template download_request.xml)
 	xmlPayload, err := rb.BuildDownloadRequest(rfc, packageID)
 	if err != nil {
-		return nil, fmt.Errorf("error building request: %w", err)
+		return nil, fmt.Errorf("xml generation error: %w", err)
 	}
 
-	// 3. Crear Request HTTP
-	req, err := http.NewRequest("POST", urlDescarga, bytes.NewBuffer(xmlPayload))
+	req, err := http.NewRequest(http.MethodPost, urlDescarga, bytes.NewBuffer(xmlPayload))
 	if err != nil {
-		return nil, fmt.Errorf("error creating http request: %w", err)
+		return nil, fmt.Errorf("request creation error: %w", err)
 	}
 
-	req.Header.Set("Content-Type", "text/xml; charset=utf-8")
-	req.Header.Set("SOAPAction", soapActionDescarga)
+	s.setHeaders(req, token)
 
-	// 4. Enviar al SAT
-	client := &http.Client{} // Podríamos inyectar esto para testing
-	resp, err := client.Do(req)
+	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("network error downloading: %w", err)
+		return nil, fmt.Errorf("network error: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// 5. Leer Respuesta Raw
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading response body: %w", err)
-	}
-
-	// 6. Parsear XML
-	var envelope DownloadResponseEnvelope
-	if err := xml.Unmarshal(respBytes, &envelope); err != nil {
-		return nil, fmt.Errorf("xml parse error: %w", err)
-	}
-
-	// 7. Validar Respuesta SAT
-	satStatus := envelope.Body.Response.Header.CodEstatus
-	if satStatus != "5000" { // 5000 = Éxito según documentación SAT [cite: 365, 366]
-		return nil, fmt.Errorf("sat error: %s - %s", satStatus, envelope.Body.Response.Header.Mensaje)
-	}
-
-	// 8. Decodificar Base64 a ZIP (Bytes)
-	zipBytes, err := base64.StdEncoding.DecodeString(envelope.Body.Response.Body.PaqueteBase64)
-	if err != nil {
-		return nil, fmt.Errorf("base64 decode error: %w", err)
-	}
-
-	return zipBytes, nil
+	return s.processDownloadResponse(resp.Body)
 }
