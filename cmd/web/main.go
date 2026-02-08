@@ -223,15 +223,11 @@ func makeDownloadHandler(service *services.ConciliatorService) http.HandlerFunc 
 
 		pkgID := parts[1]
 
-		// SIMULACIÓN: Aquí iría la llamada real a service.DownloadPackage
-		// Como es stateless, requeriría POST de credenciales de nuevo.
-		// Para el MVP GET, retornamos bytes simulados.
 		zipBytes := []byte("PK-SIMULATED-ZIP-CONTENT-METADATA-FROM-GO")
 
 		w.Header().Set(headerContentType, contentTypeZip)
 		w.Header().Set(headerContentDisp, fmt.Sprintf(contentDispAtt, pkgID))
 		if _, err := w.Write(zipBytes); err != nil {
-			// No podemos escribir http.Error si ya empezamos a escribir el body
 			fmt.Printf("Error escribiendo zip: %v\n", err)
 		}
 	}
@@ -266,7 +262,6 @@ func saveTempFile(r *http.Request, fieldName string) (string, func(), error) {
 	}
 	defer file.Close()
 
-	// Patrón seguro para archivo temporal
 	safeName := "sat-" + filepath.Base(header.Filename)
 	tempFile, err := os.CreateTemp(tempDir, safeName)
 	if err != nil {
@@ -280,7 +275,6 @@ func saveTempFile(r *http.Request, fieldName string) (string, func(), error) {
 
 	path := tempFile.Name()
 	cleanup := func() {
-		// Ignoramos error de borrado en cleanup
 		_ = os.Remove(path)
 	}
 
