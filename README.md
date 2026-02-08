@@ -93,7 +93,7 @@ This project reflects how I work in production environments:
 
 ```bash
 # Clone the repository
-git clone [https://github.com/TU-USUARIO/sat-reconciler.git](https://github.com/TU-USUARIO/sat-reconciler.git)
+git clone [https://github.com/TU-USUARIO/sat-reconciler.git](https://github.com/i4ene0lguin/sat-reconciler)
 cd sat-reconciler
 
 # Build with metadata injection
