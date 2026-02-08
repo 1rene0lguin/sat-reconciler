@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 )
 
 // Estructura para pasar datos a la vista
@@ -26,11 +27,15 @@ func main() {
 	// 3. Ruta de Carga de Archivos (El endpoint que recibe la FIEL)
 	http.HandleFunc("/upload-fiel", handleUpload)
 
-	port := ":3000"
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Default para local
+	}
+
 	fmt.Printf("🐺 Irene Olguin - SAT Reconciler Web v1.0\n")
 	fmt.Printf("🚀 Servidor corriendo en http://localhost%s\n", port)
 
-	if err := http.ListenAndServe(port, nil); err != nil {
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatal(err)
 	}
 }
