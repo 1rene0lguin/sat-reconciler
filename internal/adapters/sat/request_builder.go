@@ -49,18 +49,18 @@ type RequestBuilder struct {
 	templates  *template.Template
 }
 
-func (a *RequestBuilder) NewRequestBuilder(keyPath, cerPath string) (*RequestBuilder, error) {
-	privKey, err := a.loadPrivateKey(keyPath)
+func NewRequestBuilder(keyPath, cerPath string) (*RequestBuilder, error) {
+	privKey, err := loadPrivateKey(keyPath)
 	if err != nil {
 		return nil, err
 	}
 
-	cert, err := a.loadCertificate(cerPath)
+	cert, err := loadCertificate(cerPath)
 	if err != nil {
 		return nil, err
 	}
 
-	tmpls, err := a.loadTemplates()
+	tmpls, err := loadTemplates()
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func (a *RequestBuilder) BuildVerificationRequest(rfc, idSolicitud string) ([]by
 
 // --- Private Helper Functions ---
 
-func (*RequestBuilder) loadPrivateKey(path string) (*rsa.PrivateKey, error) {
+func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	keyBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("error leyendo key: %w", err)
@@ -122,7 +122,7 @@ func (*RequestBuilder) loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	return rsaKey, nil
 }
 
-func (*RequestBuilder) loadCertificate(path string) (*x509.Certificate, error) {
+func loadCertificate(path string) (*x509.Certificate, error) {
 	cerBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("error leyendo cer: %w", err)
@@ -136,7 +136,7 @@ func (*RequestBuilder) loadCertificate(path string) (*x509.Certificate, error) {
 	return x509.ParseCertificate(cerBytes)
 }
 
-func (*RequestBuilder) loadTemplates() (*template.Template, error) {
+func loadTemplates() (*template.Template, error) {
 	return template.ParseFiles(templatePathSolicitud, templatePathVerifica)
 }
 
