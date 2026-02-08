@@ -1,23 +1,41 @@
 package sat // <--- CAMBIO IMPORTANTE: Debe coincidir con request_builder.go
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/xml"
 	"fmt"
+	"io"
+	"net/http"
 
 	// Asegúrate de que este import apunte a TU repo y carpeta correcta
 	"github.com/i4ene0lguin/sat-reconcilier/internal/core/domain"
 )
 
-// SoapAdapter implementa la interfaz ports.SatGateway
-// Al estar en el mismo paquete 'sat', ya "ve" a RequestBuilder sin importarlo.
 type SoapAdapter struct {
 	// Configuración futura (URL, Timeouts, etc.)
+}
+
+type AutenticaResponseEnvelope struct {
+	Body struct {
+		AutenticaResponse struct {
+			AutenticaResult string `xml:"AutenticaResult"` // Aquí viene el Token
+		} `xml:"AutenticaResponse"`
+	} `xml:"Body"`
+}
+
+type DescargaResponseEnvelope struct {
+	Body struct {
+		RespuestaDescargaMasiva struct {
+			Paquete string `xml:"Paquete"` // Aquí viene el ZIP en Base64
+		} `xml:"RespuestaDescargaMasivaTercerosResult"`
+	} `xml:"Body"`
 }
 
 func NewSoapAdapter() *SoapAdapter {
 	return &SoapAdapter{}
 }
 
-// CheckStatus verifica el estado de una solicitud (Implementa interfaz del puerto)
 func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.VerificationResult, error) {
 	// Como estamos en el mismo package 'sat', podemos llamar a NewRequestBuilder directo
 	rb, err := NewRequestBuilder(keyPath, certPath)
@@ -43,14 +61,12 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.
 	}, nil
 }
 
-// RequestMetadata solicita la descarga (Implementa interfaz del puerto)
 func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string) (string, error) {
 	rb, err := NewRequestBuilder(keyPath, certPath)
 	if err != nil {
 		return "", fmt.Errorf("error iniciando builder: %w", err)
 	}
 
-	// Preparamos los parámetros usando el struct definido en request_builder.go
 	params := SoapRequestParams{
 		RfcSolicitante: rfc,
 		FechaInicio:    start,
@@ -70,25 +86,59 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string)
 	return "UUID-SIMULADO-DESDE-ADAPTER", nil
 }
 
-// DownloadPackage descarga el ZIP del SAT (Simulado por ahora)
-func (s *SoapAdapter) DownloadPackage(rfc, packageId, certPath, keyPath string) ([]byte, error) {
+func (s *SoapAdapter) DownloadPackage(rfc, packageID, certPath, keyPath string) ([]byte, error) {
+	// 1. Preparar Builder
 	rb, err := NewRequestBuilder(keyPath, certPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error builder: %w", err)
 	}
 
-	// Construimos el XML
-	xmlBytes, err := rb.BuildDownloadRequest(rfc, packageId)
+	// 2. Construir XML Firmado (Usando tu template download_request.xml)
+	xmlPayload, err := rb.BuildDownloadRequest(rfc, packageID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error building request: %w", err)
 	}
 
-	// TODO: Enviar HTTP al servicio de recuperación (https://cfdidescargamasivasolicitud.clouda...)
-	// El SAT regresa un XML con un campo <Paquete> en Base64.
-	// Tendrías que hacer: base64.Decode(respuesta.Paquete)
+	// 3. Crear Request HTTP
+	req, err := http.NewRequest("POST", urlDescarga, bytes.NewBuffer(xmlPayload))
+	if err != nil {
+		return nil, fmt.Errorf("error creating http request: %w", err)
+	}
 
-	fmt.Printf("--- XML DESCARGA GENERADO (Simulando Envío) ---\n%s\n", string(xmlBytes))
+	req.Header.Set("Content-Type", "text/xml; charset=utf-8")
+	req.Header.Set("SOAPAction", soapActionDescarga)
 
-	// SIMULACIÓN: Retornamos bytes vacíos o un zip fake
-	return []byte("CONTENIDO-DEL-ZIP-SIMULADO"), nil
+	// 4. Enviar al SAT
+	client := &http.Client{} // Podríamos inyectar esto para testing
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error downloading: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 5. Leer Respuesta Raw
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	// 6. Parsear XML
+	var envelope DownloadResponseEnvelope
+	if err := xml.Unmarshal(respBytes, &envelope); err != nil {
+		return nil, fmt.Errorf("xml parse error: %w", err)
+	}
+
+	// 7. Validar Respuesta SAT
+	satStatus := envelope.Body.Response.Header.CodEstatus
+	if satStatus != "5000" { // 5000 = Éxito según documentación SAT [cite: 365, 366]
+		return nil, fmt.Errorf("sat error: %s - %s", satStatus, envelope.Body.Response.Header.Mensaje)
+	}
+
+	// 8. Decodificar Base64 a ZIP (Bytes)
+	zipBytes, err := base64.StdEncoding.DecodeString(envelope.Body.Response.Body.PaqueteBase64)
+	if err != nil {
+		return nil, fmt.Errorf("base64 decode error: %w", err)
+	}
+
+	return zipBytes, nil
 }

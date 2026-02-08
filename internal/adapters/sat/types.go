@@ -2,8 +2,33 @@ package sat
 
 import "time"
 
-// Metadata representa la información clave extraída de los Web Services del SAT.
-// No guardamos el XML completo en memoria, solo lo que importa para conciliar.
+const (
+	soapActionDescarga = "http://DescargaMasivaTerceros.sat.gob.mx/IDescargaMasivaTercerosService/Descargar"
+	urlDescarga        = "https://cfdidescargamasivasolicitud.clouda.sat.gob.mx/DescargaMasivaService.svc"
+)
+
+type DownloadResponseEnvelope struct {
+	Body DownloadResponseBody `xml:"Body"`
+}
+
+type DownloadResponseBody struct {
+	Response DownloadResponse `xml:"RespuestaDescargaMasivaTercerosSalida"`
+}
+
+type DownloadResponse struct {
+	Header DownloadHeader `xml:"header"`
+	Body   DownloadBody   `xml:"body"`
+}
+
+type DownloadHeader struct {
+	CodEstatus string `xml:"codEstatus,attr"`
+	Mensaje    string `xml:"mensaje,attr"`
+}
+
+type DownloadBody struct {
+	PaqueteBase64 string `xml:"Paquete"` // Aquí viene el ZIP codificado
+}
+
 type Metadata struct {
 	UUID               string     `json:"uuid" xml:"Uuid"`
 	RfcEmisor          string     `json:"rfc_emisor" xml:"RfcEmisor"`
@@ -18,7 +43,6 @@ type Metadata struct {
 	FechaCancelacion   *time.Time `json:"fecha_cancelacion,omitempty" xml:"FechaCancelacion"` // Puntero porque puede ser null
 }
 
-// ReconciliationResult es lo que le entregamos al cliente (CSV/JSON final).
 type ReconciliationResult struct {
 	Metadata     Metadata `json:"sat_data"`
 	ErpMonto     float64  `json:"erp_monto"`
@@ -27,7 +51,6 @@ type ReconciliationResult struct {
 	Comentario   string   `json:"comentario"`
 }
 
-// Estructuras para Verificar Estado
 type VerifyResponseEnvelope struct {
 	Body VerifyResponseBody `xml:"Body"`
 }
@@ -48,7 +71,6 @@ type VerifyResult struct {
 	Paquetes              []string `xml:"IdsPaquetes"` // Los IDs para descargar (si terminó)
 }
 
-// Params para el template de verificación
 type VerifyParams struct {
 	IdSolicitud    string
 	RfcSolicitante string
