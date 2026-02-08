@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/i4ene0lguin/sat-reconcilier/internal/adapters/sat"
-	"github.com/i4ene0lguin/sat-reconcilier/internal/parser"
+	"github.com/1rene0lguin/sat-reconciler/internal/adapters/sat"
+	"github.com/1rene0lguin/sat-reconciler/internal/parser"
 )
 
 func TestParseMetadataTxt_AAA(t *testing.T) {

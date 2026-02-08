@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"text/template"
+	"time"
 )
 
 const (
@@ -217,4 +218,41 @@ func (rb *RequestBuilder) BuildDownloadRequest(rfc, idPaquete string) ([]byte, e
 	}
 
 	return finalXML.Bytes(), nil
+}
+
+func (rb *RequestBuilder) BuildAuthRequest() ([]byte, error) {
+	now := time.Now().UTC()
+	created := now.Format(dateTimeFormat)
+	expires := now.Add(5 * time.Minute).Format(dateTimeFormat)
+
+	// 1. Canonicalización del Timestamp (Lo que realmente firma el SAT en Auth)
+	canonicalTimestamp := fmt.Sprintf(envAutenticaFmt, created, expires)
+
+	// 2. Firmar
+	digest, signature, err := rb.computeSignature(canonicalTimestamp)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Preparar parámetros para el template
+	params := AuthParams{
+		Created:     created,
+		Expires:     expires,
+		DigestValue: digest,
+		Signature:   signature,
+		Certificate: base64.StdEncoding.EncodeToString(rb.cert.Raw),
+		Uuid:        fmt.Sprintf("uuid-%d", now.UnixNano()), // ID único para el BinarySecurityToken
+	}
+
+	return rb.renderTemplate(templateNameAuth, params)
+}
+
+func (rb *RequestBuilder) renderTemplate(tmplName string, data any) ([]byte, error) {
+	var buffer bytes.Buffer
+
+	if err := rb.templates.ExecuteTemplate(&buffer, tmplName, data); err != nil {
+		return nil, fmt.Errorf("error renderizando template %s: %w", tmplName, err)
+	}
+
+	return buffer.Bytes(), nil
 }

@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	satAdapter "github.com/i4ene0lguin/sat-reconcilier/internal/adapters/sat"
-	"github.com/i4ene0lguin/sat-reconcilier/internal/core/domain"
-	"github.com/i4ene0lguin/sat-reconcilier/internal/core/services"
+	satAdapter "github.com/1rene0lguin/sat-reconciler/internal/adapters/sat"
+	"github.com/1rene0lguin/sat-reconciler/internal/core/domain"
+	"github.com/1rene0lguin/sat-reconciler/internal/core/services"
 )
 
 // --- Constants (CamelCase) ---

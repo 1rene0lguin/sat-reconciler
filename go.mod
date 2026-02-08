@@ -1,3 +1,3 @@
-module github.com/i4ene0lguin/sat-reconcilier
+module github.com/1rene0lguin/sat-reconciler
 
 go 1.24

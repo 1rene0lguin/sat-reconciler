@@ -3,8 +3,8 @@ package services
 import (
 	"fmt"
 
-	"github.com/i4ene0lguin/sat-reconcilier/internal/core/domain"
-	"github.com/i4ene0lguin/sat-reconcilier/internal/core/ports"
+	"github.com/1rene0lguin/sat-reconciler/internal/core/domain"
+	"github.com/1rene0lguin/sat-reconciler/internal/core/ports"
 )
 
 type ConciliatorService struct {

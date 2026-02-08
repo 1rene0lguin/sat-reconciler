@@ -1,6 +1,6 @@
 package ports
 
-import "github.com/i4ene0lguin/sat-reconcilier/internal/core/domain"
+import "github.com/1rene0lguin/sat-reconciler/internal/core/domain"
 
 type SatGateway interface {
 	RequestMetadata(rfc, start, end, certPath, keyPath string) (string, error)

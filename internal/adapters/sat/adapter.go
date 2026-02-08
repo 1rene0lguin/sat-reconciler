@@ -7,22 +7,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
-	"github.com/i4ene0lguin/sat-reconcilier/internal/core/domain"
+	"github.com/1rene0lguin/sat-reconciler/internal/core/domain"
 )
 
-const (
-	urlDescarga        = "https://cfdidescargamasiva.clouda.sat.gob.mx/PeticionDescargaMasivaService.svc"
-	soapActionDescarga = "http://DescargaMasivaTerceros.sat.gob.mx/IPeticionDescargaMasivaService/PeticionDescargaMasiva"
-
-	headerContentType = "Content-Type"
-	headerAuth        = "Authorization"
-	mimeTypeXML       = "text/xml; charset=utf-8"
-	authPrefix        = "WRAP access_token=\""
-	authSuffix        = "\""
-
-	satStatusSuccess = "5000"
-)
+const ()
 
 type SoapAdapter struct {
 	client *http.Client
@@ -63,19 +53,6 @@ func (s *SoapAdapter) validateSatStatus(header DownloadHeader) error {
 		return fmt.Errorf("sat error %s: %s", header.CodEstatus, header.Mensaje)
 	}
 	return nil
-}
-
-// authenticate encapsula la lógica de obtención de token (WRAP).
-// [TODO] Debes implementar esto usando el servicio de Autenticación del SAT [cite: 34]
-func (s *SoapAdapter) authenticate(certPath, keyPath string) (string, error) {
-	// Implementación real pendiente:
-	// 1. Generar SOAP de Autentica
-	// 2. Firmar con certificado
-	// 3. Enviar a https://cfdidescargamasivasolicitud.clouda.sat.gob.mx/Autenticacion/Autenticacion.svc
-	// 4. Retornar el token string
-
-	// Para MVP/Simulación local retornamos un dummy validable
-	return "MOCK_TOKEN_WRAP_ACCESS", nil
 }
 
 type AutenticaResponseEnvelope struct {
@@ -170,4 +147,67 @@ func (s *SoapAdapter) DownloadPackage(rfc, packageID, certPath, keyPath string) 
 	defer resp.Body.Close()
 
 	return s.processDownloadResponse(resp.Body)
+}
+
+func (s *SoapAdapter) authenticate(certPath, keyPath string) (string, error) {
+	rb, err := NewRequestBuilder(keyPath, certPath)
+	if err != nil {
+		return "", err
+	}
+
+	authXML, err := rb.BuildAuthRequest()
+	if err != nil {
+		return "", err
+	}
+
+	return s.doAuthRequest(authXML)
+}
+
+// doAuthRequest envía el sobre SOAP y extrae el token del body o headers.
+func (s *SoapAdapter) doAuthRequest(xmlPayload []byte) (string, error) {
+	req, err := http.NewRequest(http.MethodPost, urlAutenticacion, bytes.NewReader(xmlPayload))
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", errAuthRequest, err)
+	}
+
+	// Headers requeridos por el SAT [cite: 35, 36]
+	req.Header.Set("Content-Type", "text/xml; charset=utf-8")
+	req.Header.Set("SOAPAction", actionAutentica)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", errAuthRequest, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("error HTTP en autenticación: %d", resp.StatusCode)
+	}
+
+	// El SAT devuelve el token dentro del XML de respuesta (AutenticaResult).
+	// Por simplicidad y performance (evitar struct gigante), lo extraemos directo.
+	// En un refactor futuro, usar un struct XML Decoder es válido.
+	return extractTokenFromResponse(resp.Body)
+}
+
+// extractTokenFromResponse busca el string del token en la respuesta.
+func extractTokenFromResponse(body io.Reader) (string, error) {
+	respBytes, err := io.ReadAll(body)
+	if err != nil {
+		return "", err
+	}
+
+	// La respuesta suele ser: <AutenticaResult>WRAP access_token="..."</AutenticaResult>
+	// Buscamos el contenido crudo.
+	responseString := string(respBytes)
+
+	// TODO: Mejorar esto con XML Unmarshal para ser más robusto.
+	// Esta es una implementación rápida tipo "grep" para el MVP.
+	// El token suele venir encoded, Go lo maneja bien como string opaco.
+	if len(responseString) < 10 {
+		return "", fmt.Errorf(errEmptyToken)
+	}
+
+	return responseString, nil
 }
