@@ -69,3 +69,26 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string)
 
 	return "UUID-SIMULADO-DESDE-ADAPTER", nil
 }
+
+// DownloadPackage descarga el ZIP del SAT (Simulado por ahora)
+func (s *SoapAdapter) DownloadPackage(rfc, packageId, certPath, keyPath string) ([]byte, error) {
+	rb, err := NewRequestBuilder(keyPath, certPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Construimos el XML
+	xmlBytes, err := rb.BuildDownloadRequest(rfc, packageId)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: Enviar HTTP al servicio de recuperación (https://cfdidescargamasivasolicitud.clouda...)
+	// El SAT regresa un XML con un campo <Paquete> en Base64.
+	// Tendrías que hacer: base64.Decode(respuesta.Paquete)
+
+	fmt.Printf("--- XML DESCARGA GENERADO (Simulando Envío) ---\n%s\n", string(xmlBytes))
+
+	// SIMULACIÓN: Retornamos bytes vacíos o un zip fake
+	return []byte("CONTENIDO-DEL-ZIP-SIMULADO"), nil
+}

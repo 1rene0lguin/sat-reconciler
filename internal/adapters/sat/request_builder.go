@@ -26,6 +26,9 @@ const (
 	canonicalVerificaFmt  = `<des:solicitud xmlns:des="http://DescargaMasivaTerceros.sat.gob.mx" IdSolicitud="%s" RfcSolicitante="%s"></des:solicitud>`
 
 	signedInfoFmt = `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></CanonicalizationMethod><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"></SignatureMethod><Reference URI=""><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"></Transform></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"></DigestMethod><DigestValue>%s</DigestValue></Reference></SignedInfo>`
+
+	templateNameDescarga = "download_request.xml"
+	canonicalDescargaFmt = `<des:peticionDescarga xmlns:des="http://DescargaMasivaTerceros.sat.gob.mx" IdPaquete="%s" RfcSolicitante="%s"></des:peticionDescarga>`
 )
 
 type SoapRequestParams struct {
@@ -41,6 +44,16 @@ type SoapRequestParams struct {
 	IssuerName     string
 	SerialNumber   string
 	IdSolicitud    string
+}
+
+type DownloadParams struct {
+	IdPaquete      string
+	RfcSolicitante string
+	DigestValue    string
+	SignatureValue string
+	Certificate    string
+	IssuerName     string
+	SerialNumber   string
 }
 
 type RequestBuilder struct {
@@ -178,4 +191,30 @@ func (rb *RequestBuilder) computeSignature(canonicalString string) (digest, sign
 	}
 
 	return digest, base64.StdEncoding.EncodeToString(sigBytes), nil
+}
+
+func (rb *RequestBuilder) BuildDownloadRequest(rfc, idPaquete string) ([]byte, error) {
+	canonicalString := fmt.Sprintf(canonicalDescargaFmt, idPaquete, rfc)
+
+	digest, signature, err := rb.computeSignature(canonicalString)
+	if err != nil {
+		return nil, err
+	}
+
+	params := DownloadParams{
+		IdPaquete:      idPaquete,
+		RfcSolicitante: rfc,
+		DigestValue:    digest,
+		SignatureValue: signature,
+		Certificate:    base64.StdEncoding.EncodeToString(rb.cert.Raw),
+		IssuerName:     rb.cert.Issuer.String(),
+		SerialNumber:   rb.cert.SerialNumber.String(),
+	}
+
+	var finalXML bytes.Buffer
+	if err := rb.templates.ExecuteTemplate(&finalXML, templateNameDescarga, params); err != nil {
+		return nil, fmt.Errorf("error renderizando template descarga: %w", err)
+	}
+
+	return finalXML.Bytes(), nil
 }
