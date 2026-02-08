@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/i4ene0lguin/sat-reconcilier/internal/sat"
+	"github.com/i4ene0lguin/sat-reconcilier/internal/adapters/sat"
 )
 
 // ParseMetadataTxt procesa el archivo .txt separado por ~ del SAT.
