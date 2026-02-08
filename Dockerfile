@@ -1,6 +1,6 @@
 # --- STAGE 1: Builder ---
 # Usamos una imagen reciente. Si Go 1.25 no está oficial en DockerHub, usamos 'latest' o '1.24-rc'.
-FROM golang:alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Instalar certificados CA y herramientas básicas
 RUN apk add --no-cache git ca-certificates

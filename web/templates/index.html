@@ -78,132 +78,14 @@
                     <span>Firmar y Enviar Solicitud</span>
                 </button>
             </form>
-            <div class="border-t border-slate-700 my-8 relative">
-                <span class="absolute top-[-10px] left-1/2 -translate-x-1/2 bg-slate-800 px-2 text-xs text-slate-500 uppercase">O bien</span>
-            </div>
 
-            <div class="opacity-75 hover:opacity-100 transition-opacity">
-                <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    Verificar Estatus de Solicitud
-                </h3>
-
-                <form hx-post="/check-status" hx-encoding="multipart/form-data" hx-target="#verify-log" class="space-y-4">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input type="text" name="rfc_verify" placeholder="RFC Solicitante" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-purple-500 outline-none uppercase">
-                        <input type="text" name="uuid_verify" placeholder="UUID Solicitud (del paso anterior)" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-purple-500 outline-none font-mono">
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <input type="file" name="cer_verify" accept=".cer" class="text-xs text-slate-400 file:bg-slate-700 file:border-0 file:rounded file:px-2 file:py-1 file:text-white">
-                        <input type="file" name="key_verify" accept=".key" class="text-xs text-slate-400 file:bg-slate-700 file:border-0 file:rounded file:px-2 file:py-1 file:text-white">
-                        <input type="password" name="password_verify" placeholder="Contraseña" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white text-xs">
-                    </div>
-
-                    <button type="submit" class="w-full bg-slate-700 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded transition-colors text-sm">
-                        Consultar al SAT
-                    </button>
-                </form>
-
-                <div id="verify-log" class="mt-4"></div>
-            </div>
-            
             <div class="mt-6">
                 <label class="text-xs text-slate-500 font-mono mb-1 block">> System Output:</label>
                 <div id="request-log" class="bg-slate-950 rounded-lg p-4 font-mono text-xs text-green-400 h-32 overflow-y-auto border border-slate-800">
                     Waiting for input...
                 </div>
             </div>
-            <div class="mt-24 border-t border-slate-800 pt-16">
-                <div class="text-center mb-16">
-                    <h2 class="text-3xl font-extrabold text-white tracking-tight mb-4">
-                        Más que código: <span class="text-transparent bg-clip-text bg-gradient-to-r from-sat-500 to-purple-500">Decisiones de Arquitectura</span>
-                    </h2>
-                    <p class="text-slate-400 max-w-2xl mx-auto">
-                        Esta herramienta es el resultado de 16 años resolviendo problemas fiscales de alto volumen.
-                        Así es como transformamos lecciones de la industria en software de precisión.
-                    </p>
-                </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-
-                    <div class="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 hover:border-sat-500/50 transition-colors group">
-                        <div class="flex items-start gap-4">
-                            <div class="p-3 bg-slate-800 rounded-lg text-sat-500 group-hover:bg-sat-500 group-hover:text-white transition-colors">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-bold text-white mb-2">El Desafío de la Escala Real</h3>
-                                <p class="text-slate-400 text-sm leading-relaxed mb-4">
-                                    <strong class="text-slate-200">Lección aprendida:</strong> Gestionando la nómina de un <strong class="text-white">Gigante Global de Cosméticos (Fortune 500)</strong>, descubrimos que la API estándar del SAT fallaba bajo concurrencia extrema.
-                                </p>
-                                <div class="bg-slate-950 p-4 rounded border border-slate-800 text-xs font-mono text-green-400">
-                                    > Reingeniería Aplicada:<br>
-                                    Este motor aplica los algoritmos de rate-limiting y particionado que diseñé para resolver esos cuellos de botella masivos, reescritos desde cero en Go.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 hover:border-purple-500/50 transition-colors group">
-                        <div class="flex items-start gap-4">
-                            <div class="p-3 bg-slate-800 rounded-lg text-purple-500 group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-bold text-white mb-2">Minería de Datos & Compresión</h3>
-                                <p class="text-slate-400 text-sm leading-relaxed mb-4">
-                                    <strong class="text-slate-200">El Problema:</strong> Almacenar millones de XMLs en FileSystem es ineficiente y lento para auditoría.
-                                </p>
-                                <div class="bg-slate-950 p-4 rounded border border-slate-800 text-xs font-mono text-purple-400">
-                                    > Arquitectura:<br>
-                                    Almacenamiento NoSQL/Embedded con compresión de bits en atributo. <br>
-                                    Resultado: <span class="text-white font-bold">50% menos storage</span> vs ZIPs tradicionales y acceso instantáneo para Data Mining.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 hover:border-red-500/50 transition-colors group">
-                        <div class="flex items-start gap-4">
-                            <div class="p-3 bg-slate-800 rounded-lg text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-bold text-white mb-2">Seguridad "On-Premise"</h3>
-                                <p class="text-slate-400 text-sm leading-relaxed mb-4">
-                                    <strong class="text-slate-200">Riesgo:</strong> Subir la FIEL a la nube de terceros es un riesgo de seguridad inaceptable para corporativos.
-                                </p>
-                                <div class="bg-slate-950 p-4 rounded border border-slate-800 text-xs font-mono text-red-400">
-                                    > Modelo de Responsabilidad:<br>
-                                    El backend procesa en memoria (RAM) y desecha las llaves inmediatamente. <br>
-                                    Próximamente: Versión Desktop aislada (Air-gapped ready).
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 hover:border-cyan-500/50 transition-colors group">
-                        <div class="flex items-start gap-4">
-                            <div class="p-3 bg-slate-800 rounded-lg text-cyan-500 group-hover:bg-cyan-500 group-hover:text-white transition-colors">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-bold text-white mb-2">Por qué Go (Golang)</h3>
-                                <p class="text-slate-400 text-sm leading-relaxed mb-4">
-                                    <strong class="text-slate-200">Performance:</strong> Node.js y Python consumen demasiada memoria procesando XMLs masivos.
-                                </p>
-                                <div class="bg-slate-950 p-4 rounded border border-slate-800 text-xs font-mono text-cyan-400">
-                                    > Benchmarks:<br>
-                                    Compilación nativa estática.<br>
-                                    Manejo de miles de Goroutines para descarga concurrente sin bloquear el hilo principal.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
         </div>
     </div>
 </div>
