@@ -39,3 +39,11 @@ func (s *ConciliatorService) VerifyRequest(rfc, uuid, cert, key string) (string,
 
 	return fmt.Sprintf("Estado: %s - %s", result.Status, result.Message), nil
 }
+
+func (s *ConciliatorService) DownloadPackage(rfc, pkgID, cert, key string) ([]byte, error) {
+	return s.satGateway.DownloadPackage(rfc, pkgID, cert, key)
+}
+
+func (s *ConciliatorService) CheckStatus(rfc, uuid, cert, key string) (*domain.VerificationResult, error) {
+	return s.satGateway.CheckStatus(rfc, uuid, cert, key)
+}
