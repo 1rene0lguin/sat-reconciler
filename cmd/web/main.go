@@ -29,7 +29,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080" // Default para local
+		port = "3000" // Default para local
 	}
 
 	fmt.Printf("🐺 Irene Olguin - SAT Reconciler Web v1.0\n")
