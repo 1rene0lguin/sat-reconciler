@@ -1,3 +1,12 @@
+```mermaid
+## TL;DR
+
+- **What:** High-throughput, read-only SAT metadata downloader built for audit & compliance.
+- **Who:** Finance, payroll, and compliance teams dealing with large CFDI volumes.
+- **Why:** SAT APIs fail under real-world load; this engine is designed to survive that.
+- **What it is NOT:** A SaaS, a billing system, or a CFDI editor.
+```
+
 # SAT Fiscal Reconciliation Engine (Go)
 
 ![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)
@@ -10,6 +19,20 @@
 Designed to operate in **Zero-Trust environments** where data integrity, auditability, and operational security are non-negotiable.
 
 ---
+## 🚫 Explicit Non-Goals
+
+This project intentionally does NOT:
+
+- Persist user credentials or certificates
+- Modify, cancel, or sign CFDIs
+- Provide a SaaS or multi-tenant cloud solution
+- Abstract SAT quirks behind "magic" retries
+
+## ⚖️ Known Trade-offs
+
+- In-memory only credential handling limits long-running jobs
+- Read-only scope avoids legal liability but reduces automation
+- Local execution prioritizes security over ease of deployment
 
 ## 📋 Table of Contents
 
@@ -30,7 +53,8 @@ Designed to operate in **Zero-Trust environments** where data integrity, auditab
 
 > *"Why build another SAT downloader?"*
 
-In a previous role managing payroll reconciliation for a **Fortune 500 Global Cosmetics Leader**, I discovered that standard integration patterns fail at scale. When processing millions of invoices, the official SAT API behaves unpredictably—timeouts, rate limits (Error 5003), and silent failures are common.
+When processing payroll metadata for a multinational company
+handling **millions of CFDI records per fiscal cycle**,
 
 **This engine is the crystallized solution to those production scars.**
 
@@ -488,7 +512,8 @@ go test -tags=integration ./internal/adapters/sat/
 
 ---
 
-## 🚧 Roadmap
+This roadmap represents architectural explorations, not a product commitment.
+## 🚧 Exploratory Roadmap (Not Committed)
 
 - [ ] GraphQL API for modern integrations
 - [ ] Background job queue for async processing
@@ -513,6 +538,15 @@ I specialize in stabilizing high-risk backend systems. My focus is on **correctn
 
 * **Approach:** Documented decisions, deterministic behavior, minimal magic.
 * **Stack:** Go, SQL, Distributed Systems, Legacy Integration.
+
+---
+
+## 🧠 Engineering Principles
+
+- Prefer explicit failures over silent retries
+- Correctness over convenience
+- Readability over cleverness
+- Legal safety is a technical requirement
 
 ---
 
