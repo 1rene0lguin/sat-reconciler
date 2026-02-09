@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	templatePathSolicitud = "internal/sat/templates/soap_request.xml"
-	templatePathVerifica  = "internal/sat/templates/verify_request.xml"
+	templatePathSolicitud = "internal/adapters/sat/templates/soap_request.xml"
+	templatePathVerifica  = "internal/adapters/sat/templates/verify_request.xml"
 
 	templateNameSolicitud = "soap_request.xml"
 	templateNameVerifica  = "verify_request.xml"
