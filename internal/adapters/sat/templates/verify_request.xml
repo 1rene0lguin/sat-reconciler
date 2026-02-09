@@ -2,7 +2,7 @@
     <soapenv:Header/>
     <soapenv:Body>
         <des:VerificaSolicitudDescarga>
-            <des:solicitud IdSolicitud="{{.IdSolicitud}}" RfcSolicitante="{{.RfcSolicitante}}">
+            <des:solicitud IdSolicitud="{{.RequestID}}" RfcSolicitante="{{.RfcSolicitant}}">
                 <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
                     <SignedInfo>
                         <CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>

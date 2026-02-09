@@ -7,6 +7,13 @@ import (
 	"github.com/1rene0lguin/sat-reconciler/internal/core/ports"
 )
 
+const (
+	msgRequestFinished  = "Solicitud Terminada. Encontrados %d paquetes."
+	msgDownloadingPkg   = "\n -> Descargando paquete: %s ... OK"
+	msgRequestInProcess = "El SAT sigue procesando tu solicitud (Estado: En Proceso). Intenta más tarde."
+	msgStatusFormat     = "Estado: %s - %s"
+)
+
 type ConciliatorService struct {
 	satGateway ports.SatGateway
 	// storage ports.Repository (Futuro)
@@ -25,19 +32,19 @@ func (s *ConciliatorService) VerifyRequest(rfc, uuid, cert, key string) (string,
 	}
 
 	if result.Status == domain.StatusFinished {
-		msg := fmt.Sprintf("Solicitud Terminada. Encontrados %d paquetes.", len(result.PackageIDs))
+		msg := fmt.Sprintf(msgRequestFinished, len(result.PackageIDs))
 
 		for _, pkgID := range result.PackageIDs {
-			msg += fmt.Sprintf("\n -> Descargando paquete: %s ... OK", pkgID)
+			msg += fmt.Sprintf(msgDownloadingPkg, pkgID)
 		}
 		return msg, nil
 	}
 
 	if result.Status == domain.StatusInProcess || result.Status == domain.StatusAccepted {
-		return "El SAT sigue procesando tu solicitud (Estado: En Proceso). Intenta más tarde.", nil
+		return msgRequestInProcess, nil
 	}
 
-	return fmt.Sprintf("Estado: %s - %s", result.Status, result.Message), nil
+	return fmt.Sprintf(msgStatusFormat, result.Status, result.Message), nil
 }
 
 func (s *ConciliatorService) DownloadPackage(rfc, pkgID, cert, key string) ([]byte, error) {

@@ -21,73 +21,73 @@ func ParseMetadataTxt(reader io.Reader) ([]sat.Metadata, error) {
 		lineCount++
 		line := scanner.Text()
 
-		// Limpieza básica
+		// Basic cleanup
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
 
-		// El separador oficial es ~
-		fields := strings.Split(line, "~")
+		// Official separator is ~
+		fields := strings.Split(line, sat.MetadataSeparator)
 
-		// Validación de estructura mínima (al menos hasta el UUID y RFCs)
+		// Validation of minimal structure (at least until UUID and RFCs)
 		if len(fields) < 5 {
-			// Si es la primera línea y falla, probablemente sea un header o basura
+			// If it's the first line and fails, it's likely a header or garbage
 			if lineCount == 1 {
 				continue
 			}
-			return nil, fmt.Errorf("linea %d mal formada: %d campos encontrados", lineCount, len(fields))
+			return nil, fmt.Errorf("malformed line %d: %d fields found", lineCount, len(fields))
 		}
 
-		// Detectar y saltar cabecera si existe
+		// Detect and skip header if exists
 		if strings.HasPrefix(fields[0], "Uuid") || strings.HasPrefix(fields[0], "UUID") {
 			continue
 		}
 
-		// Construcción del objeto
+		// Object construction
 		meta := sat.Metadata{
-			UUID:           fields[0],
-			RfcEmisor:      fields[1],
-			NombreEmisor:   fields[2],
-			RfcReceptor:    fields[3],
-			NombreReceptor: fields[4],
-			// fields[5] es RfcPac (no mapeado en struct simple)
-			// Fechas (indices 6 y 7) se procesan abajo
-			// Monto (indice 8)
-			// Efecto (indice 9)
-			// Estatus (indice 10)
+			UUID:         fields[0],
+			RfcIssuer:    fields[1],
+			NameIssuer:   fields[2],
+			RfcReceiver:  fields[3],
+			NameReceiver: fields[4],
+			// fields[5] is RfcPac (not mapped in simple struct)
+			// Dates (indices 6 and 7) processed below
+			// Amount (index 8)
+			// Effect (index 9)
+			// Status (index 10)
 		}
 
-		// Parseo de Fechas (Defensivo)
+		// Date Parsing (Defensive)
 		if len(fields) > 6 {
-			meta.FechaEmision = parseSatDate(fields[6])
+			meta.DateEmission = parseSatDate(fields[6])
 		}
 		if len(fields) > 7 {
-			meta.FechaCertificacion = parseSatDate(fields[7])
+			meta.DateCertification = parseSatDate(fields[7])
 		}
 
-		// Parseo de Monto
+		// Amount Parsing
 		if len(fields) > 8 {
 			if val, err := strconv.ParseFloat(strings.TrimSpace(fields[8]), 64); err == nil {
 				meta.Total = val
 			}
 		}
 
-		// Parseo de Efecto y Estatus
+		// Effect and Status Parsing
 		if len(fields) > 10 {
-			meta.TipoComprobante = fields[9]
-			// SAT devuelve "1" para Vigente, "0" para Cancelado
-			if fields[10] == "1" {
-				meta.Estatus = "Vigente"
+			meta.TypeVoucher = fields[9]
+			// SAT returns "1" for Vigente (Active), "0" for Cancelado (Cancelled)
+			if fields[10] == sat.StatusVigente {
+				meta.Status = "Vigente"
 			} else {
-				meta.Estatus = "Cancelado"
+				meta.Status = "Cancelado"
 			}
 		}
 
-		// Fecha Cancelación (si existe)
+		// Cancellation Date (if exists)
 		if len(fields) > 11 && strings.TrimSpace(fields[11]) != "" {
-			fechaCancel := parseSatDate(fields[11])
-			meta.FechaCancelacion = &fechaCancel
+			cancelDate := parseSatDate(fields[11])
+			meta.DateCancellation = &cancelDate
 		}
 
 		results = append(results, meta)

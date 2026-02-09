@@ -19,6 +19,8 @@ import (
 const (
 	templatePathSolicitud = "internal/adapters/sat/templates/soap_request.xml"
 	templatePathVerifica  = "internal/adapters/sat/templates/verify_request.xml"
+	templatePathDescarga  = "internal/adapters/sat/templates/download_request.xml"
+	templatePathAuth      = "internal/adapters/sat/templates/auth_request.xml"
 
 	templateNameSolicitud = "soap_request.xml"
 	templateNameVerifica  = "verify_request.xml"
@@ -33,23 +35,23 @@ const (
 )
 
 type SoapRequestParams struct {
-	RfcSolicitante string
-	FechaInicio    string
-	FechaFin       string
-	TipoSolicitud  string
-	RfcEmisor      string
-	RfcReceptor    string
+	RfcSolicitant  string
+	DateStart      string
+	DateEnd        string
+	TypeRequest    string
+	RfcIssuer      string
+	RfcReceiver    string
 	DigestValue    string
 	SignatureValue string
 	Certificate    string
 	IssuerName     string
 	SerialNumber   string
-	IdSolicitud    string
+	RequestID      string
 }
 
 type DownloadParams struct {
-	IdPaquete      string
-	RfcSolicitante string
+	PackageID      string
+	RfcSolicitant  string
 	DigestValue    string
 	SignatureValue string
 	Certificate    string
@@ -89,18 +91,18 @@ func NewRequestBuilder(keyPath, cerPath string) (*RequestBuilder, error) {
 func (a *RequestBuilder) BuildSignedRequest(params SoapRequestParams) ([]byte, error) {
 	canonicalString := fmt.Sprintf(
 		canonicalSolicitudFmt,
-		params.FechaFin, params.FechaInicio, params.RfcEmisor, params.RfcReceptor, params.RfcSolicitante, params.TipoSolicitud,
+		params.DateEnd, params.DateStart, params.RfcIssuer, params.RfcReceiver, params.RfcSolicitant, params.TypeRequest,
 	)
 
 	return a.buildXML(templateNameSolicitud, canonicalString, &params)
 }
 
-func (a *RequestBuilder) BuildVerificationRequest(rfc, idSolicitud string) ([]byte, error) {
-	canonicalString := fmt.Sprintf(canonicalVerificaFmt, idSolicitud, rfc)
+func (a *RequestBuilder) BuildVerificationRequest(rfc, requestID string) ([]byte, error) {
+	canonicalString := fmt.Sprintf(canonicalVerificaFmt, requestID, rfc)
 
 	params := SoapRequestParams{
-		IdSolicitud:    idSolicitud,
-		RfcSolicitante: rfc,
+		RequestID:     requestID,
+		RfcSolicitant: rfc,
 	}
 
 	return a.buildXML(templateNameVerifica, canonicalString, &params)
@@ -151,7 +153,12 @@ func loadCertificate(path string) (*x509.Certificate, error) {
 }
 
 func loadTemplates() (*template.Template, error) {
-	return template.ParseFiles(templatePathSolicitud, templatePathVerifica)
+	return template.ParseFiles(
+		templatePathSolicitud,
+		templatePathVerifica,
+		templatePathDescarga,
+		templatePathAuth,
+	)
 }
 
 func (a *RequestBuilder) buildXML(tmplName, canonicalString string, params *SoapRequestParams) ([]byte, error) {
@@ -188,14 +195,14 @@ func (rb *RequestBuilder) computeSignature(canonicalString string) (digest, sign
 
 	sigBytes, err := rsa.SignPKCS1v15(rand.Reader, rb.privateKey, crypto.SHA1, signedInfoHash)
 	if err != nil {
-		return "", "", fmt.Errorf("error firmando RSA: %w", err)
+		return "", "", fmt.Errorf("error signing RSA: %w", err)
 	}
 
 	return digest, base64.StdEncoding.EncodeToString(sigBytes), nil
 }
 
-func (rb *RequestBuilder) BuildDownloadRequest(rfc, idPaquete string) ([]byte, error) {
-	canonicalString := fmt.Sprintf(canonicalDescargaFmt, idPaquete, rfc)
+func (rb *RequestBuilder) BuildDownloadRequest(rfc, packageID string) ([]byte, error) {
+	canonicalString := fmt.Sprintf(canonicalDescargaFmt, packageID, rfc)
 
 	digest, signature, err := rb.computeSignature(canonicalString)
 	if err != nil {
@@ -203,8 +210,8 @@ func (rb *RequestBuilder) BuildDownloadRequest(rfc, idPaquete string) ([]byte, e
 	}
 
 	params := DownloadParams{
-		IdPaquete:      idPaquete,
-		RfcSolicitante: rfc,
+		PackageID:      packageID,
+		RfcSolicitant:  rfc,
 		DigestValue:    digest,
 		SignatureValue: signature,
 		Certificate:    base64.StdEncoding.EncodeToString(rb.cert.Raw),
@@ -214,7 +221,7 @@ func (rb *RequestBuilder) BuildDownloadRequest(rfc, idPaquete string) ([]byte, e
 
 	var finalXML bytes.Buffer
 	if err := rb.templates.ExecuteTemplate(&finalXML, templateNameDescarga, params); err != nil {
-		return nil, fmt.Errorf("error renderizando template descarga: %w", err)
+		return nil, fmt.Errorf("error rendering download template: %w", err)
 	}
 
 	return finalXML.Bytes(), nil
@@ -236,12 +243,12 @@ func (rb *RequestBuilder) BuildAuthRequest() ([]byte, error) {
 
 	// 3. Preparar parámetros para el template
 	params := AuthParams{
-		Created:     created,
-		Expires:     expires,
-		DigestValue: digest,
-		Signature:   signature,
-		Certificate: base64.StdEncoding.EncodeToString(rb.cert.Raw),
-		Uuid:        fmt.Sprintf("uuid-%d", now.UnixNano()), // ID único para el BinarySecurityToken
+		Created:        created,
+		Expires:        expires,
+		DigestValue:    digest,
+		SignatureValue: signature,
+		Certificate:    base64.StdEncoding.EncodeToString(rb.cert.Raw),
+		BinaryTokenID:  fmt.Sprintf("uuid-%d", now.UnixNano()), // ID único para el BinarySecurityToken
 	}
 
 	return rb.renderTemplate(templateNameAuth, params)
