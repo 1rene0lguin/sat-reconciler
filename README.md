@@ -1,11 +1,9 @@
-```mermaid
 ## TL;DR
 
 - **What:** High-throughput, read-only SAT metadata downloader built for audit & compliance.
 - **Who:** Finance, payroll, and compliance teams dealing with large CFDI volumes.
 - **Why:** SAT APIs fail under real-world load; this engine is designed to survive that.
 - **What it is NOT:** A SaaS, a billing system, or a CFDI editor.
-```
 
 # SAT Fiscal Reconciliation Engine (Go)
 
