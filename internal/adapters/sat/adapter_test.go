@@ -105,20 +105,44 @@ func TestRequestMetadata_AAA(t *testing.T) {
 	defer os.Remove(keyPath)
 	defer os.Remove(certPath)
 
+	// Mock HTTP Client
+	mockTripper := &MockRoundTripper{
+		RoundTripFunc: func(req *http.Request) *http.Response {
+			if req.URL.String() == urlSolicitud {
+				// Successful response with UUID
+				responseXML := `
+				<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+					<s:Body>
+						<SolicitaDescargaResponse xmlns="http://DescargaMasivaTerceros.sat.gob.mx">
+							<SolicitaDescargaResult IdSolicitud="12345-ABCDE-67890" CodEstatus="5000" Mensaje="Solicitud Aceptada"/>
+						</SolicitaDescargaResponse>
+					</s:Body>
+				</s:Envelope>`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(responseXML)),
+					Header:     make(http.Header),
+				}
+			}
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
+			}
+		},
+	}
+
 	adapter := NewSoapAdapter()
-	// No necesitamos mockear HTTP porque RequestMetadata aun no hace llamadas reales (segun analisis)
-	// Pero si las hiciera en el futuro, aqui fallaria.
-	// Dado el estado actual, probamos que genere el UUID simulado.
+	adapter.client.Transport = mockTripper // Inject Mock Transport
 
 	// ACT
-	uuid, err := adapter.RequestMetadata("RFC", "ini", "fin", certPath, keyPath)
+	uuid, err := adapter.RequestMetadata("RFC", "2024-01-01T00:00:00", "2024-01-31T23:59:59", certPath, keyPath)
 
 	// ASSERT
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	if uuid == "" {
-		t.Error("Expected UUID, got empty")
+	if uuid != "12345-ABCDE-67890" {
+		t.Errorf("Expected UUID '12345-ABCDE-67890', got '%s'", uuid)
 	}
 }
 
@@ -128,16 +152,54 @@ func TestCheckStatus_AAA(t *testing.T) {
 	defer os.Remove(keyPath)
 	defer os.Remove(certPath)
 
+	// Mock HTTP Client
+	mockTripper := &MockRoundTripper{
+		RoundTripFunc: func(req *http.Request) *http.Response {
+			if req.URL.String() == urlVerifica {
+				// Successful response with Finished status
+				responseXML := `
+				<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+					<s:Body>
+						<VerificaSolicitudDescargaResponse xmlns="http://DescargaMasivaTerceros.sat.gob.mx">
+							<VerificaSolicitudDescargaResult EstadoSolicitud="3" CodigoEstadoSolicitud="5000" Mensaje="Solicitud Terminada" NumeroCFDIs="10">
+								<IdsPaquetes>
+									<string>PKG-001</string>
+									<string>PKG-002</string>
+								</IdsPaquetes>
+							</VerificaSolicitudDescargaResult>
+						</VerificaSolicitudDescargaResponse>
+					</s:Body>
+				</s:Envelope>`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(responseXML)),
+					Header:     make(http.Header),
+				}
+			}
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString("Not Found")),
+			}
+		},
+	}
+
 	adapter := NewSoapAdapter()
+	adapter.client.Transport = mockTripper // Inject Mock Transport
 
 	// ACT
-	res, err := adapter.CheckStatus("RFC", "UUID", certPath, keyPath)
+	res, err := adapter.CheckStatus("RFC123", "TEST-UUID-12345", certPath, keyPath)
 
 	// ASSERT
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	if res.Status != domain.StatusInProcess {
-		t.Errorf("Expected Status InProcess, got %v", res.Status)
+	if res.Status != domain.StatusFinished {
+		t.Errorf("Expected Status Finished (3), got %v", res.Status)
+	}
+	if res.UUID != "TEST-UUID-12345" {
+		t.Errorf("Expected UUID 'TEST-UUID-12345', got '%s'", res.UUID)
+	}
+	if len(res.PackageIDs) != 2 {
+		t.Errorf("Expected 2 package IDs, got %d", len(res.PackageIDs))
 	}
 }

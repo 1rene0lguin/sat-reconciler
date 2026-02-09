@@ -2,6 +2,7 @@ package sat
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
@@ -12,19 +13,27 @@ import (
 	"github.com/1rene0lguin/sat-reconciler/internal/core/domain"
 )
 
-const (
-	timeoutClient = 30 * time.Second
-)
-
 type SoapAdapter struct {
-	client *http.Client
+	client      *http.Client
+	config      AdapterConfig
+	rateLimiter *RateLimiter
+	cache       *VerificationCache
 }
 
+// NewSoapAdapter creates adapter with default production configuration
 func NewSoapAdapter() *SoapAdapter {
+	return NewSoapAdapterWithConfig(DefaultConfig())
+}
+
+// NewSoapAdapterWithConfig creates adapter with custom configuration
+func NewSoapAdapterWithConfig(config AdapterConfig) *SoapAdapter {
 	return &SoapAdapter{
 		client: &http.Client{
-			Timeout: timeoutClient,
+			Timeout: config.HTTPTimeout,
 		},
+		config:      config,
+		rateLimiter: NewRateLimiter(config.RequestsPerMinute, config.BurstSize, config.RateLimitEnabled),
+		cache:       NewVerificationCache(config.CacheTTL, config.MaxCacheSize, config.CacheEnabled),
 	}
 }
 
@@ -78,6 +87,13 @@ type DescargaResponseEnvelope struct {
 }
 
 func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.VerificationResult, error) {
+	// Check cache first
+	if cachedResult, found := s.cache.Get(rfc, uuid); found {
+		logCacheHit(s.config.Logger, "CheckStatus", uuid)
+		return cachedResult, nil
+	}
+	logCacheMiss(s.config.Logger, "CheckStatus", uuid)
+
 	rb, err := NewRequestBuilder(keyPath, certPath)
 	if err != nil {
 		return nil, fmt.Errorf("error iniciando builder: %w", err)
@@ -86,6 +102,12 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.
 	xmlBytes, err := rb.BuildVerificationRequest(rfc, uuid)
 	if err != nil {
 		return nil, fmt.Errorf("error construyendo request: %w", err)
+	}
+
+	// Apply rate limiting
+	ctx := context.Background()
+	if err := s.rateLimiter.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("rate limit error: %w", err)
 	}
 
 	// Send HTTP POST to SAT
@@ -97,7 +119,24 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.
 	req.Header.Set(headerContentType, mimeTypeXML)
 	req.Header.Set("SOAPAction", actionVerifica)
 
-	resp, err := s.client.Do(req)
+	// Log request
+	logHTTPRequest(s.config.Logger, "CheckStatus", urlVerifica, uuid)
+
+	// Perform request with retry if enabled
+	var resp *http.Response
+	if s.config.RetryEnabled {
+		resp, err = s.doRequestWithRetry(ctx, req, "CheckStatus", uuid)
+	} else {
+		start := time.Now()
+		resp, err = s.client.Do(req)
+		logHTTPResponse(s.config.Logger, "CheckStatus", uuid, func() int {
+			if resp != nil {
+				return resp.StatusCode
+			}
+			return 0
+		}(), time.Since(start), err)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("network error: %w", err)
 	}
@@ -122,6 +161,7 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.
 
 	// Validate SAT status
 	if err := s.validateSatStatus(result.CodeStatusRequest, result.Message); err != nil {
+		logSATError(s.config.Logger, "CheckStatus", uuid, result.CodeStatusRequest, result.Message)
 		return nil, err
 	}
 
@@ -140,12 +180,17 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.
 		status = domain.StatusInProcess
 	}
 
-	return &domain.VerificationResult{
+	verification := &domain.VerificationResult{
 		UUID:       uuid,
 		Status:     status,
 		Message:    result.Message,
 		PackageIDs: result.Packages,
-	}, nil
+	}
+
+	// Store in cache
+	s.cache.Set(rfc, uuid, verification)
+
+	return verification, nil
 }
 
 func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string) (string, error) {
@@ -167,6 +212,12 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string)
 		return "", fmt.Errorf("error firmando solicitud: %w", err)
 	}
 
+	// Apply rate limiting
+	ctx := context.Background()
+	if err := s.rateLimiter.Wait(ctx); err != nil {
+		return "", fmt.Errorf("rate limit error: %w", err)
+	}
+
 	// Send HTTP POST to SAT
 	req, err := http.NewRequest(http.MethodPost, urlSolicitud, bytes.NewBuffer(xmlBytes))
 	if err != nil {
@@ -176,7 +227,24 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string)
 	req.Header.Set(headerContentType, mimeTypeXML)
 	req.Header.Set("SOAPAction", actionSolicitud)
 
-	resp, err := s.client.Do(req)
+	// Log request
+	logHTTPRequest(s.config.Logger, "RequestMetadata", urlSolicitud, "new-request")
+
+	// Perform request with retry if enabled
+	var resp *http.Response
+	if s.config.RetryEnabled {
+		resp, err = s.doRequestWithRetry(ctx, req, "RequestMetadata", "new-request")
+	} else {
+		start := time.Now()
+		resp, err = s.client.Do(req)
+		logHTTPResponse(s.config.Logger, "RequestMetadata", "new-request", func() int {
+			if resp != nil {
+				return resp.StatusCode
+			}
+			return 0
+		}(), time.Since(start), err)
+	}
+
 	if err != nil {
 		return "", fmt.Errorf("network error: %w", err)
 	}
@@ -201,6 +269,7 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string)
 
 	// Validate SAT status
 	if err := s.validateSatStatus(result.CodeStatus, result.Message); err != nil {
+		logSATError(s.config.Logger, "RequestMetadata", result.IDSolicitud, result.CodeStatus, result.Message)
 		return "", err
 	}
 

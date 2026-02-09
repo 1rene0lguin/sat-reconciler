@@ -81,7 +81,7 @@ type VerifyResult struct {
 	CodeStatusRequest string   `xml:"CodigoEstadoSolicitud,attr"` // 5000: Success
 	Message           string   `xml:"Mensaje,attr"`
 	NumberCFDIs       int      `xml:"NumeroCFDIs,attr"`
-	Packages          []string `xml:"IdsPaquetes"` // Package IDs for download
+	Packages          []string `xml:"IdsPaquetes>string"` // Package IDs for download
 }
 
 type VerifyParams struct {
