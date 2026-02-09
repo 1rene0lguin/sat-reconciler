@@ -1,208 +1,450 @@
 {{define "content"}}
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+<div x-data="{ activeTab: null }" class="min-h-[80vh] flex flex-col justify-center">
 
-    <div class="lg:col-span-4 space-y-6">
-        <h1 class="text-4xl font-extrabold text-white tracking-tight leading-tight">
-            Conciliación Fiscal <br>
-            <span class="text-transparent bg-clip-text bg-gradient-to-r from-sat-500 to-purple-500">
-                Auditable & Segura
+    <!-- Header & Intro -->
+    <div class="text-center mb-16 animate-in slide-in-from-top-8 duration-700 fade-in" :class="{ 'mb-8': activeTab }">
+        <h1 class="text-5xl font-extrabold text-white tracking-tight mb-6 drop-shadow-2xl">
+            Conciliación Fiscal <br class="hidden sm:block">
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-sat-500 to-fuchsia-500">
+                Auditable & Zero-Trust
             </span>
         </h1>
-        <p class="text-slate-400 leading-relaxed">
-            Plataforma de recuperación masiva de metadatos del SAT. Diseñada para entornos de <strong>Alta Concurrencia</strong> y <strong>Cero Confianza</strong>.
+        <p class="text-slate-400 max-w-2xl mx-auto text-lg leading-relaxed">
+            Plataforma de recuperación masiva de metadatos del SAT. <br>
+            Diseñada para entornos de <strong>Alta Concurrencia</strong> sin persistencia de credenciales.
+            <br>
+            <a href="/static/docs/Servicio_de_Verificacion_de_Descarga_Masiva_2023.pdf" target="_blank"
+                class="inline-flex items-center gap-2 mt-4 text-sat-500 hover:text-sat-400 transition-colors bg-sat-500/10 px-4 py-2 rounded-full text-sm font-medium border border-sat-500/20 hover:border-sat-500/50">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                    </path>
+                </svg>
+                Leer Documentación Técnica (PDF)
+            </a>
         </p>
+    </div>
 
-        <div class="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
-            <h3 class="text-sat-500 font-bold text-sm mb-2 uppercase">Protocolo de Seguridad</h3>
-            <ul class="text-xs text-slate-400 space-y-2">
-                <li class="flex items-center gap-2">✓ Llaves privadas solo en memoria RAM</li>
-                <li class="flex items-center gap-2">✓ Firma digital (XMLDSig) local</li>
-                <li class="flex items-center gap-2">✓ Sin almacenamiento persistente de credenciales</li>
-            </ul>
+    <!-- Main Selection Menu -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto w-full transition-all duration-500"
+        x-show="!activeTab">
+
+        <!-- Button Step 1 -->
+        <button @click="activeTab = 'request'"
+            class="group relative bg-slate-800/50 hover:bg-slate-800 border border-slate-700 hover:border-sat-500 p-8 rounded-2xl text-left transition-all hover:shadow-2xl hover:shadow-sat-500/10 hover:-translate-y-1">
+            <div
+                class="absolute inset-0 bg-gradient-to-br from-sat-500/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity">
+            </div>
+            <div
+                class="p-4 bg-slate-900 rounded-xl w-fit text-sat-500 mb-6 group-hover:bg-sat-500 group-hover:text-white transition-colors shadow-lg">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z">
+                    </path>
+                </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-white mb-2">Paso 1: Solicitar Descarga</h3>
+            <p class="text-slate-400">Generar y firmar una solicitud de metadatos (XMLs) ante el SAT. Recibirás un UUID
+                para seguimiento.</p>
+        </button>
+
+        <!-- Button Step 2 -->
+        <button @click="activeTab = 'status'"
+            class="group relative bg-slate-800/50 hover:bg-slate-800 border border-slate-700 hover:border-purple-500 p-8 rounded-2xl text-left transition-all hover:shadow-2xl hover:shadow-purple-500/10 hover:-translate-y-1">
+            <div
+                class="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity">
+            </div>
+            <div
+                class="p-4 bg-slate-900 rounded-xl w-fit text-purple-500 mb-6 group-hover:bg-purple-500 group-hover:text-white transition-colors shadow-lg">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-white mb-2">Paso 2: Consultar Estado</h3>
+            <p class="text-slate-400">Verificar si el SAT ya procesó tu solicitud. Si está lista, podrás descargar los
+                paquetes.</p>
+        </button>
+    </div>
+
+    <!-- Architecture Section (Moved) -->
+    <div x-show="!activeTab"
+        class="mt-12 border-t border-slate-800/50 pt-12 pb-12 animate-in fade-in duration-1000 delay-300 max-w-6xl mx-auto">
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-extrabold text-white tracking-tight mb-4">
+                Más que código: <span
+                    class="text-transparent bg-clip-text bg-gradient-to-r from-sat-500 to-fuchsia-500">Decisiones de
+                    Arquitectura</span>
+            </h2>
+            <p class="text-slate-400 max-w-2xl mx-auto">
+                Esta herramienta es el resultado de 16 años resolviendo problemas fiscales de alto volumen.
+                Así es como transformamos lecciones de la industria en software de precisión.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+            <div
+                class="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 hover:border-sat-500/50 transition-colors group">
+                <div class="flex items-start gap-4">
+                    <div
+                        class="p-3 bg-slate-800 rounded-lg text-sat-500 group-hover:bg-sat-500 group-hover:text-white transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-white mb-2">El Desafío de la Escala Real</h3>
+                        <p class="text-slate-400 text-sm leading-relaxed mb-4">
+                            <strong class="text-slate-200">Lección aprendida:</strong> Gestionando la nómina de un
+                            <strong class="text-white">Gigante Global de Cosméticos (Fortune 500)</strong>, descubrimos
+                            que la API estándar del SAT fallaba bajo concurrencia extrema.
+                        </p>
+                        <div class="bg-slate-950 p-4 rounded border border-slate-800 text-xs font-mono text-sat-400">
+                            > Reingeniería Aplicada:<br>
+                            Este motor aplica los algoritmos de rate-limiting y particionado que diseñé para resolver
+                            esos cuellos de botella masivos, reescritos desde cero en Go.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                class="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 hover:border-fuchsia-500/50 transition-colors group">
+                <div class="flex items-start gap-4">
+                    <div
+                        class="p-3 bg-slate-800 rounded-lg text-fuchsia-500 group-hover:bg-fuchsia-600 group-hover:text-white transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4">
+                            </path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-white mb-2">Minería de Datos & Compresión</h3>
+                        <p class="text-slate-400 text-sm leading-relaxed mb-4">
+                            <strong class="text-slate-200">El Problema:</strong> Almacenar millones de XMLs en
+                            FileSystem es ineficiente y lento para auditoría.
+                        </p>
+                        <div
+                            class="bg-slate-950 p-4 rounded border border-slate-800 text-xs font-mono text-fuchsia-400">
+                            > Arquitectura:<br>
+                            Almacenamiento NoSQL/Embedded con compresión de bits en atributo. <br>
+                            Resultado: <span class="text-white font-bold">50% menos storage</span> vs ZIPs tradicionales
+                            y acceso instantáneo para Data Mining.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                class="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 hover:border-pink-500/50 transition-colors group">
+                <div class="flex items-start gap-4">
+                    <div
+                        class="p-3 bg-slate-800 rounded-lg text-pink-500 group-hover:bg-pink-500 group-hover:text-white transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z">
+                            </path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-white mb-2">Seguridad "On-Premise"</h3>
+                        <p class="text-slate-400 text-sm leading-relaxed mb-4">
+                            <strong class="text-slate-200">Riesgo:</strong> Subir la FIEL a la nube de terceros es un
+                            riesgo de seguridad inaceptable para corporativos.
+                        </p>
+                        <div class="bg-slate-950 p-4 rounded border border-slate-800 text-xs font-mono text-pink-400">
+                            > Modelo de Responsabilidad:<br>
+                            El backend procesa en memoria (RAM) y desecha las llaves inmediatamente. <br>
+                            Próximamente: Versión Desktop aislada (Air-gapped ready).
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                class="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 hover:border-violet-400/50 transition-colors group">
+                <div class="flex items-start gap-4">
+                    <div
+                        class="p-3 bg-slate-800 rounded-lg text-violet-400 group-hover:bg-violet-400 group-hover:text-white transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-white mb-2">Por qué Go (Golang)</h3>
+                        <p class="text-slate-400 text-sm leading-relaxed mb-4">
+                            <strong class="text-slate-200">Performance:</strong> Node.js y Python consumen demasiada
+                            memoria procesando XMLs masivos.
+                        </p>
+                        <div class="bg-slate-950 p-4 rounded border border-slate-800 text-xs font-mono text-violet-400">
+                            > Benchmarks:<br>
+                            Compilación nativa estática.<br>
+                            Manejo de miles de Goroutines para descarga concurrente sin bloquear el hilo principal.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
-    <div class="lg:col-span-8">
-        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+    <!-- Active Content Area -->
+    <div x-show="activeTab" x-cloak
+        class="max-w-7xl mx-auto w-full animate-in fade-in slide-in-from-bottom-8 duration-500">
 
-            <h2 class="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                <svg class="w-5 h-5 text-sat-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-                Parámetros de Solicitud (SOAP Envelope)
-            </h2>
+        <button @click="activeTab = null"
+            class="mb-8 flex items-center gap-2 text-slate-400 hover:text-white transition-colors font-medium group bg-slate-900/50 px-4 py-2 rounded-full border border-slate-700 hover:border-sat-500/50">
+            <span class="group-hover:-translate-x-1 transition-transform">←</span> Volver al menú principal
+        </button>
 
-            <form hx-post="/execute-request" hx-encoding="multipart/form-data" hx-target="#request-log" class="space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1">Fecha Inicio</label>
-                        <input type="datetime-local" name="fecha_inicio" required class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-sat-500 focus:ring-1 focus:ring-sat-500 outline-none transition-all">
+            <!-- Left Column: FORMS -->
+            <div class="lg:col-span-8">
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+
+                    <!-- Form Header -->
+                    <div class="mb-8 border-b border-slate-700 pb-6">
+                        <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+                            <span x-show="activeTab === 'request'">🚀 Solicitud de Descarga Masiva</span>
+                            <span x-show="activeTab === 'status'">🔎 Verificación de Estatus</span>
+                        </h2>
+                        <p class="text-slate-400 mt-2 text-sm">
+                            <span x-show="activeTab === 'request'">Ingresa tus credenciales FIEL para firmar
+                                digitalmente la petición SOAP.</span>
+                            <span x-show="activeTab === 'status'">Proporciona el UUID de la solicitud y tus credenciales
+                                nuevamente para autorizar la descarga.</span>
+                        </p>
                     </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1">Fecha Fin</label>
-                        <input type="datetime-local" name="fecha_fin" required class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-sat-500 focus:ring-1 focus:ring-sat-500 outline-none transition-all">
+
+                    <!-- REQUEST FORM -->
+                    <form x-show="activeTab === 'request'" hx-post="/execute-request" hx-encoding="multipart/form-data"
+                        hx-target="#request-log" class="space-y-6">
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Fecha
+                                    Inicio</label>
+                                <input type="datetime-local" name="fecha_inicio" required
+                                    class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-sat-500 focus:ring-1 focus:ring-sat-500 outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Fecha Fin</label>
+                                <input type="datetime-local" name="fecha_fin" required
+                                    class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-sat-500 focus:ring-1 focus:ring-sat-500 outline-none transition-all">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">RFC
+                                    Solicitante</label>
+                                <input type="text" name="rfc" placeholder="XAXX010101000"
+                                    class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-sat-500 outline-none uppercase font-mono tracking-wider">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tipo
+                                    Solicitud</label>
+                                <select name="tipo_solicitud"
+                                    class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-sat-500 outline-none">
+                                    <option value="Metadata">Metadata (Txt ~)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/50 p-6 rounded-xl border border-slate-700/50 space-y-4">
+                            <h3 class="text-sm font-bold text-slate-300 flex items-center gap-2">
+                                <svg class="w-4 h-4 text-sat-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                                Credenciales FIEL (Solo Memoria)
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs text-slate-500 mb-1">Certificado (.cer)</label>
+                                    <input type="file" name="cer" accept=".cer" required
+                                        class="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-sat-500/10 file:text-sat-500 hover:file:bg-sat-500/20 transition-all cursor-pointer">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-slate-500 mb-1">Llave Privada (.key)</label>
+                                    <input type="file" name="key" accept=".key" required
+                                        class="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-sat-500/10 file:text-sat-500 hover:file:bg-sat-500/20 transition-all cursor-pointer">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Contraseña</label>
+                                <input type="password" name="password" placeholder="••••••••"
+                                    class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-sat-500 outline-none">
+                            </div>
+                        </div>
+
+                        <button type="submit"
+                            class="w-full bg-sat-500 hover:bg-sat-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg shadow-sat-500/20 transition-all active:scale-95 flex justify-center items-center gap-3">
+                            <svg class="w-5 h-5 animate-spin htmx-indicator" style="display:none"
+                                xmlns="http://www.w3.org/2000/09/xmldsig#" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                    stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                </path>
+                            </svg>
+                            <span>Firmar Digitalmente y Enviar</span>
+                        </button>
+                    </form>
+
+                    <!-- STATUS FORM -->
+                    <div x-show="activeTab === 'status'">
+                        <form hx-post="/check-status" hx-encoding="multipart/form-data" hx-target="#verify-log"
+                            class="space-y-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">RFC
+                                        Solicitante</label>
+                                    <input type="text" name="rfc_verify" placeholder="XAXX010101000"
+                                        class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 outline-none uppercase font-mono tracking-wider">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">UUID
+                                        Solicitud</label>
+                                    <input type="text" name="uuid_verify" placeholder="0000-0000-0000-0000"
+                                        class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 outline-none font-mono">
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-900/50 p-6 rounded-xl border border-slate-700/50 space-y-4">
+                                <h3 class="text-sm font-bold text-slate-300 flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                    </svg>
+                                    Autenticación Requerida
+                                </h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs text-slate-500 mb-1">Certificado (.cer)</label>
+                                        <input type="file" name="cer_verify" accept=".cer" required
+                                            class="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 transition-all cursor-pointer">
+
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-slate-500 mb-1">Llave Privada (.key)</label>
+                                        <input type="file" name="key_verify" accept=".key" required
+                                            class="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 transition-all cursor-pointer">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-slate-500 mb-1">Contraseña</label>
+                                    <input type="password" name="password_verify" placeholder="••••••••"
+                                        class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-purple-500 outline-none">
+                                </div>
+                            </div>
+
+                            <button type="submit"
+                                class="w-full bg-slate-700 hover:bg-purple-600 text-white font-bold py-4 px-6 rounded-xl transition-colors shadow-lg flex justify-center items-center gap-3">
+                                <span>Verificar Estatus</span>
+                            </button>
+                        </form>
+
+                        <!-- Results Area / Step 3 Injection -->
+                        <div id="verify-log" class="mt-8"></div>
                     </div>
+
+                    <!-- Common Output Log for Request -->
+                    <div x-show="activeTab === 'request'" class="mt-8 border-t border-slate-700 pt-6">
+                        <label class="text-xs text-slate-500 font-mono mb-2 block uppercase tracking-wider">Respuesta
+                            del Sistema:</label>
+                        <div id="request-log"
+                            class="bg-slate-950 rounded-lg p-4 font-mono text-xs text-green-400 min-h-[100px] border border-slate-800 shadow-inner">
+                            Waiting for input...
+                        </div>
+                    </div>
+
                 </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1">Tipo de Solicitud</label>
-                        <select name="tipo_solicitud" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-sat-500 outline-none">
-                            <option value="Metadata">Metadata (Txt ~)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1">RFC Solicitante (Debe coincidir con la FIEL)</label>
-                        <input type="text" name="rfc" placeholder="XAXX010101000" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-sat-500 outline-none uppercase font-mono">
-                    </div>
-                </div>
-
-                <div class="border-t border-slate-700 my-4"></div>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1">Certificado (.cer)</label>
-                        <input type="file" name="cer" accept=".cer" required class="w-full text-xs text-slate-400 file:bg-slate-700 file:border-0 file:rounded-md file:px-2 file:py-1 file:text-white hover:file:bg-sat-500 transition-colors">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1">Llave Privada (.key)</label>
-                        <input type="file" name="key" accept=".key" required class="w-full text-xs text-slate-400 file:bg-slate-700 file:border-0 file:rounded-md file:px-2 file:py-1 file:text-white hover:file:bg-sat-500 transition-colors">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1">Contraseña</label>
-                        <input type="password" name="password" placeholder="Pass de la llave" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-sat-500 outline-none">
-                    </div>
-                </div>
-
-                <button type="submit" class="w-full bg-sat-500 hover:bg-cyan-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg shadow-sat-500/20 transition-all active:scale-95 flex justify-center items-center gap-2">
-                    <svg class="w-5 h-5 animate-spin htmx-indicator" style="display:none" xmlns="http://www.w3.org/2000/09/xmldsig#" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    <span>Firmar y Enviar Solicitud</span>
-                </button>
-            </form>
-            <div class="border-t border-slate-700 my-8 relative">
-                <span class="absolute top-[-10px] left-1/2 -translate-x-1/2 bg-slate-800 px-2 text-xs text-slate-500 uppercase">O bien</span>
             </div>
 
-            <div class="opacity-75 hover:opacity-100 transition-opacity">
-                <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    Verificar Estatus de Solicitud
-                </h3>
+            <!-- Right Column: EXPLANATIONS -->
+            <div class="lg:col-span-4 transition-all duration-300">
 
-                <form hx-post="/check-status" hx-encoding="multipart/form-data" hx-target="#verify-log" class="space-y-4">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input type="text" name="rfc_verify" placeholder="RFC Solicitante" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-purple-500 outline-none uppercase">
-                        <input type="text" name="uuid_verify" placeholder="UUID Solicitud (del paso anterior)" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-purple-500 outline-none font-mono">
+                <!-- Explanation: Request -->
+                <div x-show="activeTab === 'request'"
+                    class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+                    <div class="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-sat-500 font-bold text-lg mb-4 flex items-center gap-2">
+                            <span class="bg-sat-500/10 p-1.5 rounded-lg">📄</span> Flujo de Solicitud
+                        </h3>
+                        <ol class="relative border-l border-slate-700 ml-3 space-y-6">
+                            <li class="pl-6 relative">
+                                <span
+                                    class="absolute -left-1.5 top-1.5 w-3 h-3 bg-slate-600 rounded-full border-2 border-slate-900"></span>
+                                <h4 class="text-white text-sm font-semibold">1. Datos y Rango</h4>
+                                <p class="text-xs text-slate-400 mt-1">Se define el rango de fechas y tipo de solicitud
+                                    (Metadata).</p>
+                            </li>
+                            <li class="pl-6 relative">
+                                <span
+                                    class="absolute -left-1.5 top-1.5 w-3 h-3 bg-sat-500 rounded-full border-2 border-slate-900 shadow-[0_0_10px_rgba(14,165,233,0.5)]"></span>
+                                <h4 class="text-white text-sm font-semibold">2. Firma Digital (XMLDSig)</h4>
+                                <p class="text-xs text-slate-400 mt-1">El backend usa tu FIEL para firmar el sobre SOAP.
+                                    <strong class="text-amber-400">Tus llaves solo existen en RAM.</strong>
+                                </p>
+                            </li>
+                            <li class="pl-6 relative">
+                                <span
+                                    class="absolute -left-1.5 top-1.5 w-3 h-3 bg-slate-600 rounded-full border-2 border-slate-900"></span>
+                                <h4 class="text-white text-sm font-semibold">3. Recepción de UUID</h4>
+                                <p class="text-xs text-slate-400 mt-1">El SAT devuelve un ID de seguimiento. Guárdalo
+                                    para el Paso 2.</p>
+                            </li>
+                        </ol>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <input type="file" name="cer_verify" accept=".cer" class="text-xs text-slate-400 file:bg-slate-700 file:border-0 file:rounded file:px-2 file:py-1 file:text-white">
-                        <input type="file" name="key_verify" accept=".key" class="text-xs text-slate-400 file:bg-slate-700 file:border-0 file:rounded file:px-2 file:py-1 file:text-white">
-                        <input type="password" name="password_verify" placeholder="Contraseña" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white text-xs">
+                    <div class="p-4 bg-amber-900/10 rounded-lg border border-amber-500/20">
+                        <p class="text-xs text-amber-500">
+                            <strong>Nota Importante:</strong> Este paso NO descarga los archivos inmediatamente. El SAT
+                            requiere un tiempo de procesamiento (minutos a horas).
+                        </p>
                     </div>
-
-                    <button type="submit" class="w-full bg-slate-700 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded transition-colors text-sm">
-                        Consultar al SAT
-                    </button>
-                </form>
-
-                <div id="verify-log" class="mt-4"></div>
-            </div>
-            
-            <div class="mt-6">
-                <label class="text-xs text-slate-500 font-mono mb-1 block">> System Output:</label>
-                <div id="request-log" class="bg-slate-950 rounded-lg p-4 font-mono text-xs text-green-400 h-32 overflow-y-auto border border-slate-800">
-                    Waiting for input...
                 </div>
-            </div>
-            <div class="mt-24 border-t border-slate-800 pt-16">
-                <div class="text-center mb-16">
-                    <h2 class="text-3xl font-extrabold text-white tracking-tight mb-4">
-                        Más que código: <span class="text-transparent bg-clip-text bg-gradient-to-r from-sat-500 to-purple-500">Decisiones de Arquitectura</span>
-                    </h2>
-                    <p class="text-slate-400 max-w-2xl mx-auto">
-                        Esta herramienta es el resultado de 16 años resolviendo problemas fiscales de alto volumen.
-                        Así es como transformamos lecciones de la industria en software de precisión.
-                    </p>
+
+                <!-- Explanation: Status -->
+                <div x-show="activeTab === 'status'"
+                    class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+                    <div class="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-purple-500 font-bold text-lg mb-4 flex items-center gap-2">
+                            <span class="bg-purple-500/10 p-1.5 rounded-lg">🔎</span> Flujo de Verificación
+                        </h3>
+                        <ol class="relative border-l border-slate-700 ml-3 space-y-6">
+                            <li class="pl-6 relative">
+                                <span
+                                    class="absolute -left-1.5 top-1.5 w-3 h-3 bg-slate-600 rounded-full border-2 border-slate-900"></span>
+                                <h4 class="text-white text-sm font-semibold">1. Consulta de Estado</h4>
+                                <p class="text-xs text-slate-400 mt-1">Se pregunta al SAT si el UUID ya está
+                                    "Terminado".</p>
+                            </li>
+                            <li class="pl-6 relative">
+                                <span
+                                    class="absolute -left-1.5 top-1.5 w-3 h-3 bg-purple-500 rounded-full border-2 border-slate-900 shadow-[0_0_10px_rgba(168,85,247,0.5)]"></span>
+                                <h4 class="text-white text-sm font-semibold">2. Autorización de Descarga</h4>
+                                <p class="text-xs text-slate-400 mt-1">Si hay paquetes, se habilita el <strong
+                                        class="text-white">Paso 3</strong>.</p>
+                            </li>
+                            <li class="pl-6 relative">
+                                <span
+                                    class="absolute -left-1.5 top-1.5 w-3 h-3 bg-slate-600 rounded-full border-2 border-slate-900"></span>
+                                <h4 class="text-white text-sm font-semibold">3. Re-Autenticación</h4>
+                                <p class="text-xs text-slate-400 mt-1">Por seguridad, debes subir tu FIEL nuevamente
+                                    para descargar.</p>
+                            </li>
+                        </ol>
+                    </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-
-                    <div class="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 hover:border-sat-500/50 transition-colors group">
-                        <div class="flex items-start gap-4">
-                            <div class="p-3 bg-slate-800 rounded-lg text-sat-500 group-hover:bg-sat-500 group-hover:text-white transition-colors">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-bold text-white mb-2">El Desafío de la Escala Real</h3>
-                                <p class="text-slate-400 text-sm leading-relaxed mb-4">
-                                    <strong class="text-slate-200">Lección aprendida:</strong> Gestionando la nómina de un <strong class="text-white">Gigante Global de Cosméticos (Fortune 500)</strong>, descubrimos que la API estándar del SAT fallaba bajo concurrencia extrema.
-                                </p>
-                                <div class="bg-slate-950 p-4 rounded border border-slate-800 text-xs font-mono text-green-400">
-                                    > Reingeniería Aplicada:<br>
-                                    Este motor aplica los algoritmos de rate-limiting y particionado que diseñé para resolver esos cuellos de botella masivos, reescritos desde cero en Go.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 hover:border-purple-500/50 transition-colors group">
-                        <div class="flex items-start gap-4">
-                            <div class="p-3 bg-slate-800 rounded-lg text-purple-500 group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-bold text-white mb-2">Minería de Datos & Compresión</h3>
-                                <p class="text-slate-400 text-sm leading-relaxed mb-4">
-                                    <strong class="text-slate-200">El Problema:</strong> Almacenar millones de XMLs en FileSystem es ineficiente y lento para auditoría.
-                                </p>
-                                <div class="bg-slate-950 p-4 rounded border border-slate-800 text-xs font-mono text-purple-400">
-                                    > Arquitectura:<br>
-                                    Almacenamiento NoSQL/Embedded con compresión de bits en atributo. <br>
-                                    Resultado: <span class="text-white font-bold">50% menos storage</span> vs ZIPs tradicionales y acceso instantáneo para Data Mining.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 hover:border-red-500/50 transition-colors group">
-                        <div class="flex items-start gap-4">
-                            <div class="p-3 bg-slate-800 rounded-lg text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-bold text-white mb-2">Seguridad "On-Premise"</h3>
-                                <p class="text-slate-400 text-sm leading-relaxed mb-4">
-                                    <strong class="text-slate-200">Riesgo:</strong> Subir la FIEL a la nube de terceros es un riesgo de seguridad inaceptable para corporativos.
-                                </p>
-                                <div class="bg-slate-950 p-4 rounded border border-slate-800 text-xs font-mono text-red-400">
-                                    > Modelo de Responsabilidad:<br>
-                                    El backend procesa en memoria (RAM) y desecha las llaves inmediatamente. <br>
-                                    Próximamente: Versión Desktop aislada (Air-gapped ready).
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 hover:border-cyan-500/50 transition-colors group">
-                        <div class="flex items-start gap-4">
-                            <div class="p-3 bg-slate-800 rounded-lg text-cyan-500 group-hover:bg-cyan-500 group-hover:text-white transition-colors">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-bold text-white mb-2">Por qué Go (Golang)</h3>
-                                <p class="text-slate-400 text-sm leading-relaxed mb-4">
-                                    <strong class="text-slate-200">Performance:</strong> Node.js y Python consumen demasiada memoria procesando XMLs masivos.
-                                </p>
-                                <div class="bg-slate-950 p-4 rounded border border-slate-800 text-xs font-mono text-cyan-400">
-                                    > Benchmarks:<br>
-                                    Compilación nativa estática.<br>
-                                    Manejo de miles de Goroutines para descarga concurrente sin bloquear el hilo principal.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
             </div>
         </div>
     </div>

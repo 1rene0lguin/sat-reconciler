@@ -82,16 +82,55 @@ const (
             <p class="text-xs text-slate-400 font-mono">UUID: %s</p>
         </div>`
 
-	htmlDownloadSuccess = `
-        <div class="mt-4 p-4 bg-green-900 rounded border border-green-700">
-            <div class="flex items-center gap-3 mb-2">
-                <div class="w-3 h-3 rounded-full bg-green-500"></div>
-                <span class="text-white font-bold">✅ Descarga Completada</span>
-            </div>
-            <p class="text-xs text-slate-400 font-mono mb-2">UUID: %s</p>
-            <p class="text-xs text-green-400">Se descargaron %d paquete(s)</p>
-            <p class="text-xs text-slate-500 mt-2">⚡ Credenciales FIEL eliminadas inmediatamente</p>
-        </div>`
+	htmlDownloadStep = `
+		<div class="mt-6 p-6 bg-slate-900/80 rounded-xl border border-sat-500/30 animate-in fade-in slide-in-from-top-4 duration-500 shadow-2xl">
+			<div class="flex items-center gap-4 mb-6 border-b border-slate-700 pb-4">
+				<div class="w-10 h-10 rounded-full bg-sat-500/10 flex items-center justify-center text-sat-500 ring-1 ring-sat-500/50">
+					<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+				</div>
+				<div>
+					<h3 class="text-white font-bold text-lg">Paso 3: Descarga de Metadata</h3>
+					<div class="flex items-center gap-2 mt-1">
+						<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">DISPONIBLE</span>
+						<span class="text-xs text-slate-400">%d paquete(s) encontrados</span>
+					</div>
+				</div>
+			</div>
+
+			<div class="mb-6 p-4 rounded-lg bg-amber-500/10 border border-amber-500/20 flex gap-3">
+				<svg class="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+				<div class="text-sm">
+					<strong class="text-amber-400 block mb-1">🔐 Zero-Trust Security Verification</strong>
+					<span class="text-slate-300">Para descargar, el SAT requiere confirmar tu identidad nuevamente. Tus credenciales (FIEL) fueron eliminadas de la memoria tras la consulta anterior.</span>
+				</div>
+			</div>
+
+			<form action="/verify-and-download" method="POST" enctype="multipart/form-data" class="space-y-5">
+				<input type="hidden" name="rfc_verify" value="%s">
+				<input type="hidden" name="uuid_verify" value="%s">
+				
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+					<div class="group">
+						 <label class="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide group-hover:text-sat-400 transition-colors">Certificado (.cer)</label>
+						 <input type="file" name="cer_verify" accept=".cer" required class="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-sat-500/10 file:text-sat-500 hover:file:bg-sat-500/20 transition-all cursor-pointer bg-slate-950/50 rounded-lg border border-slate-700 p-1">
+					</div>
+					<div class="group">
+						 <label class="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide group-hover:text-sat-400 transition-colors">Llave Privada (.key)</label>
+						 <input type="file" name="key_verify" accept=".key" required class="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-sat-500/10 file:text-sat-500 hover:file:bg-sat-500/20 transition-all cursor-pointer bg-slate-950/50 rounded-lg border border-slate-700 p-1">
+					</div>
+				</div>
+
+				<div class="relative">
+					 <label class="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Contraseña de Clave Privada</label>
+					 <input type="password" name="password_verify" placeholder="••••••••" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:border-sat-500 focus:ring-1 focus:ring-sat-500 outline-none transition-all">
+				</div>
+
+				<button type="submit" class="w-full bg-gradient-to-r from-sat-600 to-sat-500 hover:from-sat-500 hover:to-sat-400 text-white font-bold py-3.5 px-6 rounded-lg shadow-lg shadow-sat-500/20 transition-all active:scale-[0.98] flex justify-center items-center gap-3 mt-2 group">
+					<svg class="w-5 h-5 group-hover:animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+					<span>Autenticar y Descargar Paquetes</span>
+				</button>
+			</form>
+		</div>`
 )
 
 // --- Structures ---
@@ -283,8 +322,8 @@ func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFu
 			return
 		}
 
-		// Success with packages
-		fmt.Fprintf(w, htmlDownloadSuccess, uuid, len(result.PackageIDs))
+		// Success with packages - Return Step 3 Form
+		fmt.Fprintf(w, htmlDownloadStep, len(result.PackageIDs), rfc, uuid)
 	}
 }
 
