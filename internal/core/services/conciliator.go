@@ -47,6 +47,10 @@ func (s *ConciliatorService) VerifyRequest(rfc, uuid, cert, key string) (string,
 	return fmt.Sprintf(msgStatusFormat, result.Status, result.Message), nil
 }
 
+func (s *ConciliatorService) RequestMetadata(rfc, start, end, certPath, keyPath string) (string, error) {
+	return s.satGateway.RequestMetadata(rfc, start, end, certPath, keyPath)
+}
+
 func (s *ConciliatorService) DownloadPackage(rfc, pkgID, cert, key string) ([]byte, error) {
 	return s.satGateway.DownloadPackage(rfc, pkgID, cert, key)
 }
