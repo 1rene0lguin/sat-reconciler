@@ -24,10 +24,12 @@ const (
 	envPortKey  = "PORT"
 
 	// Routes
-	staticRoute = "/static/"
-	homeRoute   = "/"
-	resumeRoute = "/resume"
-	checkRoute  = "/verify-and-download"
+	staticRoute         = "/static/"
+	homeRoute           = "/"
+	resumeRoute         = "/resume"
+	executeReqRoute     = "/execute-request"
+	checkStatusRoute    = "/check-status"
+	verifyDownloadRoute = "/verify-and-download"
 
 	// Paths
 	staticDir  = "./web/static"
@@ -36,11 +38,20 @@ const (
 	resumePath = "./web/templates/resume.html"
 	tempDir    = "./tmp"
 
-	// Form Fields
+	// Form Fields - Execute Request
+	fieldStartDate = "fecha_inicio"
+	fieldEndDate   = "fecha_fin"
+	fieldRFCReq    = "rfc"
+	fieldCerReq    = "cer"
+	fieldKeyReq    = "key"
+	fieldPassReq   = "password"
+
+	// Form Fields - Check Status
 	fieldRFC  = "rfc_verify"
 	fieldUUID = "uuid_verify"
 	fieldCer  = "cer_verify"
 	fieldKey  = "key_verify"
+	fieldPass = "password_verify"
 
 	// Headers
 	headerContentType = "Content-Type"
@@ -125,7 +136,9 @@ func setupStaticFiles(mux *http.ServeMux) {
 func setupRoutes(mux *http.ServeMux, service *services.ConciliatorService) {
 	mux.HandleFunc(homeRoute, homeHandler)
 	mux.HandleFunc(resumeRoute, resumeHandler)
-	mux.HandleFunc(checkRoute, makeVerifyAndDownloadHandler(service))
+	mux.HandleFunc(executeReqRoute, makeExecuteRequestHandler(service))
+	mux.HandleFunc(checkStatusRoute, makeCheckStatusHandler(service))
+	mux.HandleFunc(verifyDownloadRoute, makeVerifyAndDownloadHandler(service))
 }
 
 func startServer(mux *http.ServeMux) {
@@ -150,6 +163,129 @@ func getServerPort() string {
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	_ = r
 	render(w, homePath, PageData{Title: "SAT Reconciler", Version: "v1.0.0"})
+}
+
+func makeExecuteRequestHandler(service *services.ConciliatorService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !ensureMethod(w, r, http.MethodPost) {
+			return
+		}
+
+		if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+			http.Error(w, msgParseError, http.StatusBadRequest)
+			return
+		}
+
+		// Extract form values
+		rfc := r.FormValue(fieldRFCReq)
+		startDate := r.FormValue(fieldStartDate)
+		endDate := r.FormValue(fieldEndDate)
+		// password := r.FormValue(fieldPassReq) // TODO: Use for key decryption
+
+		// Save FIEL files temporarily
+		certPath, cleanupCert, err := saveTempFile(r, fieldCerReq)
+		if err != nil {
+			fmt.Fprintf(w, `<div class="p-4 bg-red-100 text-red-700 rounded border border-red-400">❌ Error guardando certificado</div>`)
+			return
+		}
+
+		keyPath, cleanupKey, err := saveTempFile(r, fieldKeyReq)
+		if err != nil {
+			cleanupCert()
+			fmt.Fprintf(w, `<div class="p-4 bg-red-100 text-red-700 rounded border border-red-400">❌ Error guardando llave privada</div>`)
+			return
+		}
+
+		// CRITICAL: Ensure cleanup happens no matter what
+		defer func() {
+			cleanupCert()
+			cleanupKey()
+		}()
+
+		// Call service to create request
+		uuid, err := service.RequestMetadata(rfc, startDate, endDate, certPath, keyPath)
+		if err != nil {
+			fmt.Printf("Service Error: %v\n", err)
+			fmt.Fprintf(w, `<div class="p-4 bg-red-100 text-red-700 rounded border border-red-400">❌ Error al enviar solicitud al SAT: %s</div>`, err.Error())
+			return
+		}
+
+		// Return success message with UUID
+		successHTML := fmt.Sprintf(`
+		<div class="mt-4 p-4 bg-green-900 rounded border border-green-700">
+			<div class="flex items-center gap-3 mb-2">
+				<div class="w-3 h-3 rounded-full bg-green-500"></div>
+				<span class="text-white font-bold">✅ Solicitud Enviada Exitosamente</span>
+			</div>
+			<p class="text-xs text-slate-400 font-mono mb-2">UUID: %s</p>
+			<p class="text-xs text-green-400">Ahora puedes verificar el estatus usando la sección inferior.</p>
+			<p class="text-xs text-slate-500 mt-2">⚡ Credenciales FIEL eliminadas de memoria</p>
+		</div>`, uuid)
+
+		fmt.Fprint(w, successHTML)
+	}
+}
+
+func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !ensureMethod(w, r, http.MethodPost) {
+			return
+		}
+
+		if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+			http.Error(w, msgParseError, http.StatusBadRequest)
+			return
+		}
+
+		rfc := r.FormValue(fieldRFC)
+		uuid := r.FormValue(fieldUUID)
+		// password := r.FormValue(fieldPass) // TODO: Use for key decryption
+
+		// Save FIEL files temporarily
+		certPath, cleanupCert, err := saveTempFile(r, fieldCer)
+		if err != nil {
+			fmt.Fprintf(w, `<div class="p-4 bg-red-100 text-red-700 rounded border border-red-400">❌ Error guardando certificado</div>`)
+			return
+		}
+
+		keyPath, cleanupKey, err := saveTempFile(r, fieldKey)
+		if err != nil {
+			cleanupCert()
+			fmt.Fprintf(w, `<div class="p-4 bg-red-100 text-red-700 rounded border border-red-400">❌ Error guardando llave privada</div>`)
+			return
+		}
+
+		// CRITICAL: Ensure cleanup happens no matter what
+		defer func() {
+			cleanupCert()
+			cleanupKey()
+		}()
+
+		// Verify status with SAT
+		result, err := service.CheckStatus(rfc, uuid, certPath, keyPath)
+		if err != nil {
+			fmt.Printf("Service Error: %v\n", err)
+			fmt.Fprintf(w, `<div class="p-4 bg-red-100 text-red-700 rounded border border-red-400">❌ Error consultando al SAT: %s</div>`, err.Error())
+			return
+		}
+
+		// Return status based on result
+		if result.Status != domain.StatusFinished {
+			statusText := fmt.Sprintf("Estado: %d - %s", result.Status, result.Message)
+			fmt.Fprintf(w, htmlStatusInProgress, statusText, uuid)
+			return
+		}
+
+		// If finished
+		if len(result.PackageIDs) == 0 {
+			statusText := "Solicitud terminada pero no hay paquetes disponibles"
+			fmt.Fprintf(w, htmlStatusInProgress, statusText, uuid)
+			return
+		}
+
+		// Success with packages
+		fmt.Fprintf(w, htmlDownloadSuccess, uuid, len(result.PackageIDs))
+	}
 }
 
 func resumeHandler(w http.ResponseWriter, r *http.Request) {
