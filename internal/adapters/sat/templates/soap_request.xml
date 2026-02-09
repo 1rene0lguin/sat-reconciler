@@ -1,8 +1,8 @@
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:des="http://DescargaMasivaTerceros.sat.gob.mx">
     <soapenv:Header/>
     <soapenv:Body>
-        <des:VerificaSolicitudDescarga>
-            <des:solicitud IdSolicitud="{{.IdSolicitud}}" RfcSolicitante="{{.RfcSolicitante}}">
+        <des:SolicitaDescarga>
+            <des:solicitud FechaInicio="{{.DateStart}}" FechaFin="{{.DateEnd}}" RfcEmisor="{{.RfcIssuer}}" RfcReceptor="{{.RfcReceiver}}" RfcSolicitante="{{.RfcSolicitant}}" TipoSolicitud="{{.TypeRequest}}">
                 <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
                     <SignedInfo>
                         <CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
@@ -27,6 +27,6 @@
                     </KeyInfo>
                 </Signature>
             </des:solicitud>
-        </des:VerificaSolicitudDescarga>
+        </des:SolicitaDescarga>
     </soapenv:Body>
 </soapenv:Envelope>

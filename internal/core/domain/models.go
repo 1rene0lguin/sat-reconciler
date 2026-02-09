@@ -10,6 +10,23 @@ const (
 	StatusRejected  RequestStatus = 5
 )
 
+func (r RequestStatus) String() string {
+	switch r {
+	case StatusAccepted:
+		return "Aceptada"
+	case StatusInProcess:
+		return "En proceso"
+	case StatusFinished:
+		return "Terminada"
+	case StatusError:
+		return "Error"
+	case StatusRejected:
+		return "Rechazada"
+	default:
+		return "Desconocido"
+	}
+}
+
 type VerificationResult struct {
 	UUID       string
 	Status     RequestStatus

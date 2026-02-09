@@ -1,71 +1,372 @@
-package sat // <--- CAMBIO IMPORTANTE: Debe coincidir con request_builder.go
+package sat
 
 import (
+	"bytes"
+	"context"
+	"encoding/base64"
+	"encoding/xml"
 	"fmt"
+	"io"
+	"net/http"
+	"time"
 
-	// Asegúrate de que este import apunte a TU repo y carpeta correcta
-	"github.com/i4ene0lguin/sat-reconcilier/internal/core/domain"
+	"github.com/1rene0lguin/sat-reconciler/internal/core/domain"
 )
 
-// SoapAdapter implementa la interfaz ports.SatGateway
-// Al estar en el mismo paquete 'sat', ya "ve" a RequestBuilder sin importarlo.
 type SoapAdapter struct {
-	// Configuración futura (URL, Timeouts, etc.)
+	client      *http.Client
+	config      AdapterConfig
+	rateLimiter *RateLimiter
+	cache       *VerificationCache
 }
 
+// NewSoapAdapter creates adapter with default production configuration
 func NewSoapAdapter() *SoapAdapter {
-	return &SoapAdapter{}
+	return NewSoapAdapterWithConfig(DefaultConfig())
 }
 
-// CheckStatus verifica el estado de una solicitud (Implementa interfaz del puerto)
+// NewSoapAdapterWithConfig creates adapter with custom configuration
+func NewSoapAdapterWithConfig(config AdapterConfig) *SoapAdapter {
+	return &SoapAdapter{
+		client: &http.Client{
+			Timeout: config.HTTPTimeout,
+		},
+		config:      config,
+		rateLimiter: NewRateLimiter(config.RequestsPerMinute, config.BurstSize, config.RateLimitEnabled),
+		cache:       NewVerificationCache(config.CacheTTL, config.MaxCacheSize, config.CacheEnabled),
+	}
+}
+
+func (s *SoapAdapter) setHeaders(req *http.Request, token string) {
+	req.Header.Set(headerContentType, mimeTypeXML)
+	req.Header.Set("SOAPAction", actionDescarga)
+	if token != "" {
+		req.Header.Set(headerAuth, authPrefix+token+authSuffix)
+	}
+}
+
+func (s *SoapAdapter) processDownloadResponse(body io.Reader) ([]byte, error) {
+	respBytes, err := io.ReadAll(body)
+	if err != nil {
+		return nil, fmt.Errorf("reading body error: %w", err)
+	}
+
+	var envelope DownloadResponseEnvelope
+	if err := xml.Unmarshal(respBytes, &envelope); err != nil {
+		return nil, fmt.Errorf("xml parsing error: %w", err)
+	}
+
+	if err := s.validateSatStatus(envelope.Body.Response.Header.CodeStatus, envelope.Body.Response.Header.Message); err != nil {
+		return nil, err
+	}
+
+	return base64.StdEncoding.DecodeString(envelope.Body.Response.Body.PackageBase64)
+}
+
+func (s *SoapAdapter) validateSatStatus(code, message string) error {
+	if code != satStatusSuccess {
+		return fmt.Errorf("sat error %s: %s", code, message)
+	}
+	return nil
+}
+
+type AutenticaResponseEnvelope struct {
+	Body struct {
+		AutenticaResponse struct {
+			AutenticaResult string `xml:"AutenticaResult"` // Aquí viene el Token
+		} `xml:"AutenticaResponse"`
+	} `xml:"Body"`
+}
+
+type DescargaResponseEnvelope struct {
+	Body struct {
+		RespuestaDescargaMasiva struct {
+			Paquete string `xml:"Paquete"` // Aquí viene el ZIP en Base64
+		} `xml:"RespuestaDescargaMasivaTercerosResult"`
+	} `xml:"Body"`
+}
+
 func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.VerificationResult, error) {
-	// Como estamos en el mismo package 'sat', podemos llamar a NewRequestBuilder directo
+	// Check cache first
+	if cachedResult, found := s.cache.Get(rfc, uuid); found {
+		logCacheHit(s.config.Logger, "CheckStatus", uuid)
+		return cachedResult, nil
+	}
+	logCacheMiss(s.config.Logger, "CheckStatus", uuid)
+
 	rb, err := NewRequestBuilder(keyPath, certPath)
 	if err != nil {
 		return nil, fmt.Errorf("error iniciando builder: %w", err)
 	}
 
-	// Construir XML
 	xmlBytes, err := rb.BuildVerificationRequest(rfc, uuid)
 	if err != nil {
 		return nil, fmt.Errorf("error construyendo request: %w", err)
 	}
 
-	// TODO: Aquí iría la llamada HTTP Real al SAT (client.Post...)
-	// Por ahora simulamos una respuesta positiva para el MVP
-	_ = xmlBytes
+	// Apply rate limiting
+	ctx := context.Background()
+	if err := s.rateLimiter.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("rate limit error: %w", err)
+	}
 
-	// Retornamos un objeto de Dominio (limpio)
-	return &domain.VerificationResult{
-		UUID:    uuid,
-		Status:  domain.StatusInProcess, // Simulamos estado 2
-		Message: "Simulación: En Proceso (Respuesta del Adapter)",
-	}, nil
+	// Send HTTP POST to SAT
+	req, err := http.NewRequest(http.MethodPost, urlVerifica, bytes.NewBuffer(xmlBytes))
+	if err != nil {
+		return nil, fmt.Errorf("request creation error: %w", err)
+	}
+
+	req.Header.Set(headerContentType, mimeTypeXML)
+	req.Header.Set("SOAPAction", actionVerifica)
+
+	// Log request
+	logHTTPRequest(s.config.Logger, "CheckStatus", urlVerifica, uuid)
+
+	// Perform request with retry if enabled
+	var resp *http.Response
+	if s.config.RetryEnabled {
+		resp, err = s.doRequestWithRetry(ctx, req, "CheckStatus", uuid)
+	} else {
+		start := time.Now()
+		resp, err = s.client.Do(req)
+		logHTTPResponse(s.config.Logger, "CheckStatus", uuid, func() int {
+			if resp != nil {
+				return resp.StatusCode
+			}
+			return 0
+		}(), time.Since(start), err)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("network error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP error: %d", resp.StatusCode)
+	}
+
+	// Parse XML response
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response error: %w", err)
+	}
+
+	var envelope VerifyResponseEnvelope
+	if err := xml.Unmarshal(respBytes, &envelope); err != nil {
+		return nil, fmt.Errorf("xml parsing error: %w", err)
+	}
+
+	result := envelope.Body.Response.Result
+
+	// Validate SAT status
+	if err := s.validateSatStatus(result.CodeStatusRequest, result.Message); err != nil {
+		logSATError(s.config.Logger, "CheckStatus", uuid, result.CodeStatusRequest, result.Message)
+		return nil, err
+	}
+
+	// Map SAT status to domain status
+	var status domain.RequestStatus
+	switch result.StatusRequest {
+	case 1:
+		status = domain.StatusAccepted
+	case 2:
+		status = domain.StatusInProcess
+	case 3:
+		status = domain.StatusFinished
+	case 5:
+		status = domain.StatusRejected
+	default:
+		status = domain.StatusInProcess
+	}
+
+	verification := &domain.VerificationResult{
+		UUID:       uuid,
+		Status:     status,
+		Message:    result.Message,
+		PackageIDs: result.Packages,
+	}
+
+	// Store in cache
+	s.cache.Set(rfc, uuid, verification)
+
+	return verification, nil
 }
 
-// RequestMetadata solicita la descarga (Implementa interfaz del puerto)
 func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string) (string, error) {
 	rb, err := NewRequestBuilder(keyPath, certPath)
 	if err != nil {
 		return "", fmt.Errorf("error iniciando builder: %w", err)
 	}
 
-	// Preparamos los parámetros usando el struct definido en request_builder.go
 	params := SoapRequestParams{
-		RfcSolicitante: rfc,
-		FechaInicio:    start,
-		FechaFin:       end,
-		TipoSolicitud:  "Metadata", // Regla de Negocio: MVP solo baja Metadata
+		RfcSolicitant: rfc,
+		DateStart:     start,
+		DateEnd:       end,
+		TypeRequest:   "Metadata", // Business Rule: MVP only downloads Metadata
 	}
 
-	// Construimos el XML firmado
+	// Build signed XML
 	xmlBytes, err := rb.BuildSignedRequest(params)
 	if err != nil {
 		return "", fmt.Errorf("error firmando solicitud: %w", err)
 	}
 
-	// TODO: Enviar HTTP al SAT.
-	fmt.Printf("--- XML GENERADO (Simulando Envío) ---\n%s\n", string(xmlBytes))
+	// Apply rate limiting
+	ctx := context.Background()
+	if err := s.rateLimiter.Wait(ctx); err != nil {
+		return "", fmt.Errorf("rate limit error: %w", err)
+	}
 
-	return "UUID-SIMULADO-DESDE-ADAPTER", nil
+	// Send HTTP POST to SAT
+	req, err := http.NewRequest(http.MethodPost, urlSolicitud, bytes.NewBuffer(xmlBytes))
+	if err != nil {
+		return "", fmt.Errorf("request creation error: %w", err)
+	}
+
+	req.Header.Set(headerContentType, mimeTypeXML)
+	req.Header.Set("SOAPAction", actionSolicitud)
+
+	// Log request
+	logHTTPRequest(s.config.Logger, "RequestMetadata", urlSolicitud, "new-request")
+
+	// Perform request with retry if enabled
+	var resp *http.Response
+	if s.config.RetryEnabled {
+		resp, err = s.doRequestWithRetry(ctx, req, "RequestMetadata", "new-request")
+	} else {
+		start := time.Now()
+		resp, err = s.client.Do(req)
+		logHTTPResponse(s.config.Logger, "RequestMetadata", "new-request", func() int {
+			if resp != nil {
+				return resp.StatusCode
+			}
+			return 0
+		}(), time.Since(start), err)
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("network error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP error: %d", resp.StatusCode)
+	}
+
+	// Parse XML response
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("reading response error: %w", err)
+	}
+
+	var envelope RequestResponseEnvelope
+	if err := xml.Unmarshal(respBytes, &envelope); err != nil {
+		return "", fmt.Errorf("xml parsing error: %w", err)
+	}
+
+	result := envelope.Body.Response.Result
+
+	// Validate SAT status
+	if err := s.validateSatStatus(result.CodeStatus, result.Message); err != nil {
+		logSATError(s.config.Logger, "RequestMetadata", result.IDSolicitud, result.CodeStatus, result.Message)
+		return "", err
+	}
+
+	if result.IDSolicitud == "" {
+		return "", fmt.Errorf("empty UUID in SAT response")
+	}
+
+	return result.IDSolicitud, nil
+}
+func (s *SoapAdapter) DownloadPackage(rfc, packageID, certPath, keyPath string) ([]byte, error) {
+	token, err := s.authenticate(certPath, keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("authentication failed: %w", err)
+	}
+
+	rb, err := NewRequestBuilder(keyPath, certPath)
+	if err != nil {
+		return nil, fmt.Errorf("builder initialization error: %w", err)
+	}
+
+	xmlPayload, err := rb.BuildDownloadRequest(rfc, packageID)
+	if err != nil {
+		return nil, fmt.Errorf("xml generation error: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, urlDescarga, bytes.NewBuffer(xmlPayload))
+	if err != nil {
+		return nil, fmt.Errorf("request creation error: %w", err)
+	}
+
+	s.setHeaders(req, token)
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	return s.processDownloadResponse(resp.Body)
+}
+
+func (s *SoapAdapter) authenticate(certPath, keyPath string) (string, error) {
+	rb, err := NewRequestBuilder(keyPath, certPath)
+	if err != nil {
+		return "", err
+	}
+
+	authXML, err := rb.BuildAuthRequest()
+	if err != nil {
+		return "", err
+	}
+
+	return s.doAuthRequest(authXML)
+}
+
+// doAuthRequest envía el sobre SOAP y extrae el token del body o headers.
+func (s *SoapAdapter) doAuthRequest(xmlPayload []byte) (string, error) {
+	req, err := http.NewRequest(http.MethodPost, urlAutenticacion, bytes.NewReader(xmlPayload))
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", errAuthRequest, err)
+	}
+
+	// Headers requeridos por el SAT [cite: 35, 36]
+	req.Header.Set(headerContentType, mimeTypeXML)
+	req.Header.Set("SOAPAction", actionAutentica)
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", errAuthRequest, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("error HTTP en autenticación: %d", resp.StatusCode)
+	}
+
+	// El SAT devuelve el token dentro del XML de respuesta (AutenticaResult).
+	// Por simplicidad y performance (evitar struct gigante), lo extraemos directo.
+	// En un refactor futuro, usar un struct XML Decoder es válido.
+	return extractTokenFromResponse(resp.Body)
+}
+
+func extractTokenFromResponse(body io.Reader) (string, error) {
+	respBytes, err := io.ReadAll(body)
+	if err != nil {
+		return "", fmt.Errorf("error reading body: %w", err)
+	}
+
+	var envelope AutenticaResponseEnvelope
+	if err := xml.Unmarshal(respBytes, &envelope); err != nil {
+		return "", fmt.Errorf("%s: %w", errAuthParse, err)
+	}
+
+	token := envelope.Body.AutenticaResponse.AutenticaResult
+	if token == "" {
+		return "", fmt.Errorf(errEmptyToken)
+	}
+
+	return token, nil
 }

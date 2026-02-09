@@ -32,7 +32,7 @@ COPY --from=builder /app/conciliador-web .
 
 # Copiamos los templates y estáticos (VITAL: Docker no copia carpetas solas)
 COPY --from=builder /app/web ./web
-COPY --from=builder /app/internal/sat/templates ./internal/sat/templates
+COPY --from=builder /app/internal/adapters/sat/templates ./internal/adapters/sat/templates
 
 # Puerto que expone el contenedor (Railway usa la variable PORT, pero documentamos 8080)
 EXPOSE 8080

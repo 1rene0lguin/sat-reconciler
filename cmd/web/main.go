@@ -8,23 +8,27 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
-	sat_adapter "github.com/i4ene0lguin/sat-reconcilier/internal/adapters/sat"
-	"github.com/i4ene0lguin/sat-reconcilier/internal/core/services"
+	satAdapter "github.com/1rene0lguin/sat-reconciler/internal/adapters/sat"
+	"github.com/1rene0lguin/sat-reconciler/internal/core/domain"
+	"github.com/1rene0lguin/sat-reconciler/internal/core/services"
 )
 
-// --- Constants ---
+// --- Constants (CamelCase) ---
 
 const (
+	// Server Config
 	defaultPort = "3000"
 	envPortKey  = "PORT"
 
 	// Routes
-	staticRoute = "/static/"
-	homeRoute   = "/"
-	resumeRoute = "/resume"
-	uploadRoute = "/upload-fiel"
-	checkRoute  = "/check-status"
+	staticRoute   = "/static/"
+	homeRoute     = "/"
+	resumeRoute   = "/resume"
+	uploadRoute   = "/upload-fiel"
+	checkRoute    = "/check-status"
+	downloadRoute = "/download/"
 
 	// Paths
 	staticDir  = "./web/static"
@@ -39,6 +43,12 @@ const (
 	fieldCer  = "cer_verify"
 	fieldKey  = "key_verify"
 
+	// Headers
+	headerContentType = "Content-Type"
+	contentTypeZip    = "application/zip"
+	headerContentDisp = "Content-Disposition"
+	contentDispAtt    = "attachment; filename=\"sat_metadata_%s.zip\""
+
 	// Config
 	maxUploadSize = 10 << 20 // 10MB
 
@@ -47,17 +57,23 @@ const (
 	msgInternalError    = "Error interno del servidor"
 	msgParseError       = "Error procesando solicitud"
 	msgFileError        = "Error guardando archivos temporales"
+	msgInvalidURL       = "URL de descarga inválida"
+	msgInvalidService   = "Error en servicio de conciliación"
 
 	// HTML Responses
 	htmlUploadSuccess = `<div class="p-4 bg-green-100 text-green-700 rounded border border-green-400">✅ Archivos recibidos en memoria</div>`
-	htmlStatusResult  = `
+
+	htmlStatusResult = `
         <div class="mt-4 p-4 bg-slate-900 rounded border border-slate-700">
             <div class="flex items-center gap-3 mb-2">
                 <div class="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
                 <span class="text-white font-bold">%s</span>
             </div>
-            <p class="text-xs text-slate-400 font-mono">UUID: %s</p>
+            <p class="text-xs text-slate-400 font-mono mb-3">UUID: %s</p>
+			%s
         </div>`
+
+	htmlDownloadBtn = `<a href="/download/%s/%s" class="block w-full text-center bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded transition-colors text-sm">💾 Descargar Paquete</a>`
 )
 
 // --- Structures ---
@@ -70,15 +86,17 @@ type PageData struct {
 // --- Entry Point ---
 
 func main() {
-	setupTempDir()
+	if err := setupTempDir(); err != nil {
+		log.Fatalf("Error creando directorio temporal: %v", err)
+	}
 
-	// 1. Infrastructure (Adapters)
-	soapAdapter := sat_adapter.NewSoapAdapter()
+	// 1. Infraestructura (Adapters) - CamelCase
+	soapAdapter := satAdapter.NewSoapAdapter()
 
-	// 2. Core (Service)
+	// 2. Núcleo (Service)
 	conciliator := services.NewConciliatorService(soapAdapter)
 
-	// 3. Presentation (Router & Handlers)
+	// 3. Presentación (Router)
 	mux := http.NewServeMux()
 	setupStaticFiles(mux)
 	setupRoutes(mux, conciliator)
@@ -88,8 +106,8 @@ func main() {
 
 // --- Setup Functions ---
 
-func setupTempDir() {
-	_ = os.Mkdir(tempDir, 0755)
+func setupTempDir() error {
+	return os.MkdirAll(tempDir, 0755)
 }
 
 func setupStaticFiles(mux *http.ServeMux) {
@@ -102,6 +120,7 @@ func setupRoutes(mux *http.ServeMux, service *services.ConciliatorService) {
 	mux.HandleFunc(resumeRoute, resumeHandler)
 	mux.HandleFunc(uploadRoute, uploadHandler)
 	mux.HandleFunc(checkRoute, makeCheckStatusHandler(service))
+	mux.HandleFunc(downloadRoute, makeDownloadHandler(service))
 }
 
 func startServer(mux *http.ServeMux) {
@@ -124,26 +143,25 @@ func getServerPort() string {
 // --- Handlers ---
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
+	_ = r
 	render(w, homePath, PageData{Title: "SAT Reconciler", Version: "v1.0.0"})
 }
 
 func resumeHandler(w http.ResponseWriter, r *http.Request) {
+	_ = r
 	render(w, resumePath, PageData{Title: "Resume | Irene Olguin", Version: "v1.0.0"})
 }
 
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, msgMethodNotAllowed, http.StatusMethodNotAllowed)
+	if !ensureMethod(w, r, http.MethodPost) {
 		return
 	}
 	fmt.Fprint(w, htmlUploadSuccess)
 }
 
-// makeCheckStatusHandler crea el handler inyectando el servicio (Closure)
 func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, msgMethodNotAllowed, http.StatusMethodNotAllowed)
+		if !ensureMethod(w, r, http.MethodPost) {
 			return
 		}
 
@@ -152,11 +170,9 @@ func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFu
 			return
 		}
 
-		// Extracción de datos del Formulario
 		rfc := r.FormValue(fieldRFC)
 		uuid := r.FormValue(fieldUUID)
 
-		// Manejo de Archivos Temporales (Infraestructura Web -> Filesystem)
 		certPath, cleanupCert, err := saveTempFile(r, fieldCer)
 		if err != nil {
 			http.Error(w, msgFileError, http.StatusInternalServerError)
@@ -171,21 +187,61 @@ func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFu
 		}
 		defer cleanupKey()
 
-		// Llamada al Núcleo de Negocio
-		statusMsg, err := service.VerifyRequest(rfc, uuid, certPath, keyPath)
+		result, err := service.CheckStatus(rfc, uuid, certPath, keyPath)
 		if err != nil {
-			// En producción, loguearíamos el error real internamente
-			fmt.Printf("Error en servicio: %v\n", err)
-			http.Error(w, msgInternalError, http.StatusInternalServerError)
+			fmt.Printf("Service Error: %v\n", err)
+			http.Error(w, msgInvalidService, http.StatusInternalServerError)
 			return
 		}
 
-		// Renderizado de Respuesta (Presentación)
-		fmt.Fprintf(w, htmlStatusResult, statusMsg, uuid)
+		actionHTML := ""
+
+		if result.Status == domain.StatusFinished && len(result.PackageIDs) > 0 {
+			actionHTML = fmt.Sprintf(htmlDownloadBtn, uuid, result.PackageIDs[0])
+		}
+
+		statusText := fmt.Sprintf("Estado: %d - %s", result.Status, result.Message)
+		fmt.Fprintf(w, htmlStatusResult, statusText, uuid, actionHTML)
+	}
+}
+
+func makeDownloadHandler(service *services.ConciliatorService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_ = service
+
+		if !ensureMethod(w, r, http.MethodGet) {
+			return
+		}
+
+		path := strings.TrimPrefix(r.URL.Path, downloadRoute)
+		parts := strings.Split(path, "/")
+
+		if len(parts) < 2 {
+			http.Error(w, msgInvalidURL, http.StatusBadRequest)
+			return
+		}
+
+		pkgID := parts[1]
+
+		zipBytes := []byte("PK-SIMULATED-ZIP-CONTENT-METADATA-FROM-GO")
+
+		w.Header().Set(headerContentType, contentTypeZip)
+		w.Header().Set(headerContentDisp, fmt.Sprintf(contentDispAtt, pkgID))
+		if _, err := w.Write(zipBytes); err != nil {
+			fmt.Printf("Error escribiendo zip: %v\n", err)
+		}
 	}
 }
 
 // --- Helper Functions ---
+
+func ensureMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+	if r.Method != method {
+		http.Error(w, msgMethodNotAllowed, http.StatusMethodNotAllowed)
+		return false
+	}
+	return true
+}
 
 func render(w http.ResponseWriter, templatePath string, data PageData) {
 	files := []string{layoutPath, templatePath}
@@ -194,10 +250,11 @@ func render(w http.ResponseWriter, templatePath string, data PageData) {
 		http.Error(w, msgInternalError, http.StatusInternalServerError)
 		return
 	}
-	ts.ExecuteTemplate(w, "layout", data)
+	if err := ts.ExecuteTemplate(w, "layout", data); err != nil {
+		fmt.Printf("Error renderizando template: %v\n", err)
+	}
 }
 
-// saveTempFile guarda el archivo del multipart en disco y retorna su ruta + función de limpieza
 func saveTempFile(r *http.Request, fieldName string) (string, func(), error) {
 	file, header, err := r.FormFile(fieldName)
 	if err != nil {
@@ -205,8 +262,8 @@ func saveTempFile(r *http.Request, fieldName string) (string, func(), error) {
 	}
 	defer file.Close()
 
-	// Crear archivo temporal seguro
-	tempFile, err := os.CreateTemp(tempDir, "sat-*"+filepath.Ext(header.Filename))
+	safeName := "sat-" + filepath.Base(header.Filename)
+	tempFile, err := os.CreateTemp(tempDir, safeName)
 	if err != nil {
 		return "", func() {}, err
 	}
@@ -217,7 +274,9 @@ func saveTempFile(r *http.Request, fieldName string) (string, func(), error) {
 	}
 
 	path := tempFile.Name()
-	cleanup := func() { os.Remove(path) }
+	cleanup := func() {
+		_ = os.Remove(path)
+	}
 
 	return path, cleanup, nil
 }
