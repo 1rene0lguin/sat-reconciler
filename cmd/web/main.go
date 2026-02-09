@@ -1,6 +1,8 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"fmt"
 	"html/template"
 	"io"
@@ -8,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	satAdapter "github.com/1rene0lguin/sat-reconciler/internal/adapters/sat"
 	"github.com/1rene0lguin/sat-reconciler/internal/core/domain"
@@ -23,12 +24,10 @@ const (
 	envPortKey  = "PORT"
 
 	// Routes
-	staticRoute   = "/static/"
-	homeRoute     = "/"
-	resumeRoute   = "/resume"
-	uploadRoute   = "/upload-fiel"
-	checkRoute    = "/check-status"
-	downloadRoute = "/download/"
+	staticRoute = "/static/"
+	homeRoute   = "/"
+	resumeRoute = "/resume"
+	checkRoute  = "/verify-and-download"
 
 	// Paths
 	staticDir  = "./web/static"
@@ -63,17 +62,25 @@ const (
 	// HTML Responses
 	htmlUploadSuccess = `<div class="p-4 bg-green-100 text-green-700 rounded border border-green-400">✅ Archivos recibidos en memoria</div>`
 
-	htmlStatusResult = `
+	htmlStatusInProgress = `
         <div class="mt-4 p-4 bg-slate-900 rounded border border-slate-700">
             <div class="flex items-center gap-3 mb-2">
-                <div class="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
+                <div class="w-3 h-3 rounded-full bg-yellow-500 animate-pulse"></div>
                 <span class="text-white font-bold">%s</span>
             </div>
-            <p class="text-xs text-slate-400 font-mono mb-3">UUID: %s</p>
-			%s
+            <p class="text-xs text-slate-400 font-mono">UUID: %s</p>
         </div>`
 
-	htmlDownloadBtn = `<a href="/download/%s/%s" class="block w-full text-center bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded transition-colors text-sm">💾 Descargar Paquete</a>`
+	htmlDownloadSuccess = `
+        <div class="mt-4 p-4 bg-green-900 rounded border border-green-700">
+            <div class="flex items-center gap-3 mb-2">
+                <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                <span class="text-white font-bold">✅ Descarga Completada</span>
+            </div>
+            <p class="text-xs text-slate-400 font-mono mb-2">UUID: %s</p>
+            <p class="text-xs text-green-400">Se descargaron %d paquete(s)</p>
+            <p class="text-xs text-slate-500 mt-2">⚡ Credenciales FIEL eliminadas inmediatamente</p>
+        </div>`
 )
 
 // --- Structures ---
@@ -90,7 +97,7 @@ func main() {
 		log.Fatalf("Error creando directorio temporal: %v", err)
 	}
 
-	// 1. Infraestructura (Adapters) - CamelCase
+	// 1. Infraestructura (Adapters)
 	soapAdapter := satAdapter.NewSoapAdapter()
 
 	// 2. Núcleo (Service)
@@ -118,9 +125,7 @@ func setupStaticFiles(mux *http.ServeMux) {
 func setupRoutes(mux *http.ServeMux, service *services.ConciliatorService) {
 	mux.HandleFunc(homeRoute, homeHandler)
 	mux.HandleFunc(resumeRoute, resumeHandler)
-	mux.HandleFunc(uploadRoute, uploadHandler)
-	mux.HandleFunc(checkRoute, makeCheckStatusHandler(service))
-	mux.HandleFunc(downloadRoute, makeDownloadHandler(service))
+	mux.HandleFunc(checkRoute, makeVerifyAndDownloadHandler(service))
 }
 
 func startServer(mux *http.ServeMux) {
@@ -152,14 +157,7 @@ func resumeHandler(w http.ResponseWriter, r *http.Request) {
 	render(w, resumePath, PageData{Title: "Resume | Irene Olguin", Version: "v1.0.0"})
 }
 
-func uploadHandler(w http.ResponseWriter, r *http.Request) {
-	if !ensureMethod(w, r, http.MethodPost) {
-		return
-	}
-	fmt.Fprint(w, htmlUploadSuccess)
-}
-
-func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFunc {
+func makeVerifyAndDownloadHandler(service *services.ConciliatorService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !ensureMethod(w, r, http.MethodPost) {
 			return
@@ -173,20 +171,27 @@ func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFu
 		rfc := r.FormValue(fieldRFC)
 		uuid := r.FormValue(fieldUUID)
 
+		// Save FIEL files temporarily
 		certPath, cleanupCert, err := saveTempFile(r, fieldCer)
 		if err != nil {
 			http.Error(w, msgFileError, http.StatusInternalServerError)
 			return
 		}
-		defer cleanupCert()
 
 		keyPath, cleanupKey, err := saveTempFile(r, fieldKey)
 		if err != nil {
+			cleanupCert() // Cleanup cert if key fails
 			http.Error(w, msgFileError, http.StatusInternalServerError)
 			return
 		}
-		defer cleanupKey()
 
+		// CRITICAL: Ensure cleanup happens no matter what
+		defer func() {
+			cleanupCert()
+			cleanupKey()
+		}()
+
+		// 1. Verify status with SAT
 		result, err := service.CheckStatus(rfc, uuid, certPath, keyPath)
 		if err != nil {
 			fmt.Printf("Service Error: %v\n", err)
@@ -194,43 +199,93 @@ func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFu
 			return
 		}
 
-		actionHTML := ""
-
-		if result.Status == domain.StatusFinished && len(result.PackageIDs) > 0 {
-			actionHTML = fmt.Sprintf(htmlDownloadBtn, uuid, result.PackageIDs[0])
+		// 2. If not finished, return status and exit (credentials destroyed by defer)
+		if result.Status != domain.StatusFinished {
+			statusText := fmt.Sprintf("Estado: %d - %s", result.Status, result.Message)
+			fmt.Fprintf(w, htmlStatusInProgress, statusText, uuid)
+			return
 		}
 
-		statusText := fmt.Sprintf("Estado: %d - %s", result.Status, result.Message)
-		fmt.Fprintf(w, htmlStatusResult, statusText, uuid, actionHTML)
+		// 3. If finished but no packages, return success message
+		if len(result.PackageIDs) == 0 {
+			statusText := "Solicitud terminada pero no hay paquetes disponibles"
+			fmt.Fprintf(w, htmlStatusInProgress, statusText, uuid)
+			return
+		}
+
+		// 4. Download ALL packages immediately (atomic operation)
+		packages := make(map[string][]byte)
+		for _, pkgID := range result.PackageIDs {
+			zipBytes, err := service.DownloadPackage(rfc, pkgID, certPath, keyPath)
+			if err != nil {
+				// Log error but continue with other packages
+				fmt.Printf("Error downloading package %s: %v\n", pkgID, err)
+				continue
+			}
+			packages[pkgID] = zipBytes
+		}
+
+		// 5. Credentials will be DESTROYED immediately after this function returns (defer)
+
+		// 6. If we got at least one package, create bundle and return
+		if len(packages) == 0 {
+			http.Error(w, "No se pudo descargar ningún paquete", http.StatusInternalServerError)
+			return
+		}
+
+		// 7. Bundle packages or return single package
+		var finalZip []byte
+		if len(packages) == 1 {
+			// Single package - return as-is
+			for _, zipBytes := range packages {
+				finalZip = zipBytes
+				break
+			}
+		} else {
+			// Multiple packages - bundle into one ZIP
+			finalZip, err = bundlePackages(packages)
+			if err != nil {
+				http.Error(w, "Error creating package bundle", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		// 8. Return ZIP file
+		w.Header().Set(headerContentType, contentTypeZip)
+		w.Header().Set(headerContentDisp, fmt.Sprintf(contentDispAtt, uuid))
+		if _, err := w.Write(finalZip); err != nil {
+			fmt.Printf("Error writing zip: %v\n", err)
+		}
+
+		// 9. Log success (credentials already destroyed by defer)
+		fmt.Printf("✅ Downloaded %d package(s) for UUID %s - FIEL credentials destroyed\n", len(packages), uuid)
 	}
 }
 
-func makeDownloadHandler(service *services.ConciliatorService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_ = service
+// bundlePackages combines multiple SAT packages into a single ZIP file
+func bundlePackages(packages map[string][]byte) ([]byte, error) {
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
 
-		if !ensureMethod(w, r, http.MethodGet) {
-			return
+	for pkgID, zipBytes := range packages {
+		// Create a file entry in the bundle ZIP
+		fileName := fmt.Sprintf("%s.zip", pkgID)
+		writer, err := zipWriter.Create(fileName)
+		if err != nil {
+			return nil, fmt.Errorf("error creating zip entry: %w", err)
 		}
 
-		path := strings.TrimPrefix(r.URL.Path, downloadRoute)
-		parts := strings.Split(path, "/")
-
-		if len(parts) < 2 {
-			http.Error(w, msgInvalidURL, http.StatusBadRequest)
-			return
-		}
-
-		pkgID := parts[1]
-
-		zipBytes := []byte("PK-SIMULATED-ZIP-CONTENT-METADATA-FROM-GO")
-
-		w.Header().Set(headerContentType, contentTypeZip)
-		w.Header().Set(headerContentDisp, fmt.Sprintf(contentDispAtt, pkgID))
-		if _, err := w.Write(zipBytes); err != nil {
-			fmt.Printf("Error escribiendo zip: %v\n", err)
+		// Write the package ZIP content
+		if _, err := writer.Write(zipBytes); err != nil {
+			return nil, fmt.Errorf("error writing zip content: %w", err)
 		}
 	}
+
+	if err := zipWriter.Close(); err != nil {
+		return nil, fmt.Errorf("error closing zip writer: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
 // --- Helper Functions ---
