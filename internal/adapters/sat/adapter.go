@@ -5,12 +5,13 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/xml"
-	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/1rene0lguin/sat-reconciler/internal/apperrors"
 	"github.com/1rene0lguin/sat-reconciler/internal/core/domain"
 )
 
@@ -50,12 +51,12 @@ func (s *SoapAdapter) setHeaders(req *http.Request, action, token string) {
 func (s *SoapAdapter) processDownloadResponse(body io.Reader) ([]byte, error) {
 	respBytes, err := io.ReadAll(body)
 	if err != nil {
-		return nil, fmt.Errorf("reading body error: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrReadBody, err)
 	}
 
 	var envelope DownloadResponseEnvelope
 	if err := xml.Unmarshal(respBytes, &envelope); err != nil {
-		return nil, fmt.Errorf("xml parsing error: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrXMLParsing, err)
 	}
 
 	if err := s.validateSatStatus(envelope.Header.Respuesta.CodeStatus, envelope.Header.Respuesta.Message); err != nil {
@@ -67,7 +68,7 @@ func (s *SoapAdapter) processDownloadResponse(body io.Reader) ([]byte, error) {
 
 func (s *SoapAdapter) validateSatStatus(code, message string) error {
 	if code != satStatusSuccess {
-		return fmt.Errorf("sat error %s: %s", code, message)
+		return apperrors.New(apperrors.ErrSATError, apperrors.P("code", code), apperrors.P("message", message))
 	}
 	return nil
 }
@@ -102,32 +103,32 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath, password string)
 
 	token, err := s.authenticate(certPath, keyPath, password)
 	if err != nil {
-		return nil, fmt.Errorf("authentication failed: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrAuthFailed, err)
 	}
 
 	rb, err := NewRequestBuilder(keyPath, certPath, password)
 	if err != nil {
-		return nil, fmt.Errorf("error iniciando builder: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrBuilderInit, err)
 	}
 
 	xmlBytes, err := rb.BuildVerificationRequest(rfc, uuid)
 	if err != nil {
-		return nil, fmt.Errorf("error construyendo request: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrBuildRequest, err)
 	}
 
 	// Apply rate limiting
 	ctx := context.Background()
 	if err := s.rateLimiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("rate limit error: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrRateLimit, err)
 	}
 
 	// Send HTTP POST to SAT
 	req, err := http.NewRequest(http.MethodPost, urlVerifica, bytes.NewReader(xmlBytes))
 	if err != nil {
-		return nil, fmt.Errorf("request creation error: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrRequestCreation, err)
 	}
 
-	fmt.Printf("XML: %s\n", string(xmlBytes))
+	s.config.Logger.Debug("SAT request XML", slog.String("operation", "CheckStatus"), slog.String("xml", string(xmlBytes)))
 
 	s.setHeaders(req, actionVerifica, token)
 
@@ -150,23 +151,23 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath, password string)
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("network error: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrNetworkError, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP error: %d", resp.StatusCode)
+		return nil, apperrors.New(apperrors.ErrHTTPError, apperrors.P("status_code", resp.StatusCode))
 	}
 
 	// Parse XML response
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("reading response error: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrReadResponse, err)
 	}
 
 	var envelope VerifyResponseEnvelope
 	if err := xml.Unmarshal(respBytes, &envelope); err != nil {
-		return nil, fmt.Errorf("xml parsing error: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrXMLParsing, err)
 	}
 
 	result := envelope.Body.Response.Result
@@ -213,12 +214,12 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath, password string)
 func (s *SoapAdapter) RequestMetadata(rfc, start, end, downloadType, certPath, keyPath, password string) (string, error) {
 	token, err := s.authenticate(certPath, keyPath, password)
 	if err != nil {
-		return "", fmt.Errorf("authentication failed: %w", err)
+		return "", apperrors.Wrap(apperrors.ErrAuthFailed, err)
 	}
 
 	rb, err := NewRequestBuilder(keyPath, certPath, password)
 	if err != nil {
-		return "", fmt.Errorf("error iniciando builder: %w", err)
+		return "", apperrors.Wrap(apperrors.ErrBuilderInit, err)
 	}
 
 	// Sanitizar RFC
@@ -244,19 +245,19 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, downloadType, certPath, k
 	// Build signed XML
 	xmlBytes, err := rb.BuildSignedRequest(params)
 	if err != nil {
-		return "", fmt.Errorf("error firmando solicitud: %w", err)
+		return "", apperrors.Wrap(apperrors.ErrSignRequest, err)
 	}
 
 	// Apply rate limiting
 	ctx := context.Background()
 	if err := s.rateLimiter.Wait(ctx); err != nil {
-		return "", fmt.Errorf("rate limit error: %w", err)
+		return "", apperrors.Wrap(apperrors.ErrRateLimit, err)
 	}
 
 	// Send HTTP POST to SAT
 	req, err := http.NewRequest(http.MethodPost, urlSolicitud, bytes.NewReader(xmlBytes))
 	if err != nil {
-		return "", fmt.Errorf("request creation error: %w", err)
+		return "", apperrors.Wrap(apperrors.ErrRequestCreation, err)
 	}
 
 	action := actionSolicitudEmitidos
@@ -285,23 +286,23 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, downloadType, certPath, k
 	}
 
 	if err != nil {
-		return "", fmt.Errorf("network error: %w", err)
+		return "", apperrors.Wrap(apperrors.ErrNetworkError, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("HTTP error: %d", resp.StatusCode)
+		return "", apperrors.New(apperrors.ErrHTTPError, apperrors.P("status_code", resp.StatusCode))
 	}
 
 	// Parse XML response
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("reading response error: %w", err)
+		return "", apperrors.Wrap(apperrors.ErrReadResponse, err)
 	}
 
 	var envelope RequestResponseEnvelope
 	if err := xml.Unmarshal(respBytes, &envelope); err != nil {
-		return "", fmt.Errorf("xml parsing error: %w", err)
+		return "", apperrors.Wrap(apperrors.ErrXMLParsing, err)
 	}
 
 	var result *RequestResult
@@ -310,7 +311,7 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, downloadType, certPath, k
 	} else if envelope.Body.ResponseRecibidos != nil && envelope.Body.ResponseRecibidos.ResultRecibidos != nil {
 		result = envelope.Body.ResponseRecibidos.ResultRecibidos
 	} else {
-		return "", fmt.Errorf("sat error: estructura de respuesta XML irreconocible")
+		return "", apperrors.New(apperrors.ErrXMLUnrecognizable)
 	}
 
 	// Validate SAT status
@@ -320,7 +321,7 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, downloadType, certPath, k
 	}
 
 	if result.IDSolicitud == "" {
-		return "", fmt.Errorf("empty UUID in SAT response")
+		return "", apperrors.New(apperrors.ErrEmptyUUID)
 	}
 
 	return result.IDSolicitud, nil
@@ -332,40 +333,40 @@ func (s *SoapAdapter) DownloadPackage(rfc, packageID, certPath, keyPath, passwor
 
 	token, err := s.authenticate(certPath, keyPath, password)
 	if err != nil {
-		return nil, fmt.Errorf("authentication failed: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrAuthFailed, err)
 	}
 
 	rb, err := NewRequestBuilder(keyPath, certPath, password)
 	if err != nil {
-		return nil, fmt.Errorf("builder initialization error: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrBuilderInit, err)
 	}
 
 	xmlPayload, err := rb.BuildDownloadRequest(rfc, packageID)
 	if err != nil {
-		return nil, fmt.Errorf("xml generation error: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrXMLGeneration, err)
 	}
 
 	req, err := http.NewRequest(http.MethodPost, urlDescarga, bytes.NewReader(xmlPayload))
 	if err != nil {
-		return nil, fmt.Errorf("request creation error: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrRequestCreation, err)
 	}
 
 	s.setHeaders(req, actionDescarga, token)
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("network error: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrNetworkError, err)
 	}
 	defer resp.Body.Close()
 
 	// Read the full body for debugging and parsing
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("reading response error: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrReadResponse, err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP error: %d - %s", resp.StatusCode, string(respBytes))
+		return nil, apperrors.New(apperrors.ErrHTTPError, apperrors.P("status_code", resp.StatusCode), apperrors.P("body", string(respBytes)))
 	}
 
 	return s.processDownloadResponse(bytes.NewReader(respBytes))
@@ -389,7 +390,7 @@ func (s *SoapAdapter) authenticate(certPath, keyPath, password string) (string, 
 func (s *SoapAdapter) doAuthRequest(xmlPayload []byte) (string, error) {
 	req, err := http.NewRequest(http.MethodPost, urlAutenticacion, bytes.NewReader(xmlPayload))
 	if err != nil {
-		return "", fmt.Errorf("%s: %w", errAuthRequest, err)
+		return "", apperrors.Wrap(apperrors.ErrAuthRequest, err)
 	}
 
 	// Headers requeridos por el SAT [cite: 35, 36]
@@ -398,13 +399,13 @@ func (s *SoapAdapter) doAuthRequest(xmlPayload []byte) (string, error) {
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("%s: %w", errAuthRequest, err)
+		return "", apperrors.Wrap(apperrors.ErrAuthRequest, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("error HTTP en autenticación: %d - %s", resp.StatusCode, string(bodyBytes))
+		return "", apperrors.New(apperrors.ErrAuthHTTP, apperrors.P("status_code", resp.StatusCode), apperrors.P("body", string(bodyBytes)))
 	}
 
 	// El SAT devuelve el token dentro del XML de respuesta (AutenticaResult).
@@ -416,17 +417,17 @@ func (s *SoapAdapter) doAuthRequest(xmlPayload []byte) (string, error) {
 func extractTokenFromResponse(body io.Reader) (string, error) {
 	respBytes, err := io.ReadAll(body)
 	if err != nil {
-		return "", fmt.Errorf("error reading body: %w", err)
+		return "", apperrors.Wrap(apperrors.ErrReadBody, err)
 	}
 
 	var envelope AutenticaResponseEnvelope
 	if err := xml.Unmarshal(respBytes, &envelope); err != nil {
-		return "", fmt.Errorf("%s: %w", errAuthParse, err)
+		return "", apperrors.Wrap(apperrors.ErrAuthParse, err)
 	}
 
 	token := envelope.Body.AutenticaResponse.AutenticaResult
 	if token == "" {
-		return "", fmt.Errorf(errEmptyToken)
+		return "", apperrors.New(apperrors.ErrEmptyToken)
 	}
 
 	return token, nil

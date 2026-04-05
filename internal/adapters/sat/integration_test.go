@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"testing"
+
+	"github.com/1rene0lguin/sat-reconciler/internal/apperrors"
 )
 
 // TestIntegrationSATErrorCodes tests handling of various SAT error responses
@@ -120,21 +122,21 @@ func TestIntegrationNetworkErrors(t *testing.T) {
 			httpStatus:    http.StatusInternalServerError,
 			responseBody:  "Internal Server Error",
 			expectError:   true,
-			errorContains: "request failed after",
+			errorContains: apperrors.ErrRetryExhausted,
 		},
 		{
 			name:          "HTTP 503 Service Unavailable",
 			httpStatus:    http.StatusServiceUnavailable,
 			responseBody:  "Service Unavailable",
 			expectError:   true,
-			errorContains: "request failed after",
+			errorContains: apperrors.ErrRetryExhausted,
 		},
 		{
 			name:          "HTTP 401 Unauthorized",
 			httpStatus:    http.StatusUnauthorized,
 			responseBody:  "Unauthorized",
 			expectError:   true,
-			errorContains: "network error",
+			errorContains: apperrors.ErrNetworkError,
 		},
 	}
 
@@ -192,7 +194,7 @@ func TestIntegrationMalformedResponses(t *testing.T) {
 			name:          "Invalid XML - Not well-formed",
 			responseXML:   "<broken><xml>",
 			expectError:   true,
-			errorContains: "xml parsing error",
+			errorContains: apperrors.ErrXMLParsing,
 		},
 		{
 			name: "Missing Required Fields",
@@ -205,13 +207,13 @@ func TestIntegrationMalformedResponses(t *testing.T) {
 				</s:Body>
 			</s:Envelope>`,
 			expectError:   true,
-			errorContains: "sat error",
+			errorContains: apperrors.ErrXMLUnrecognizable,
 		},
 		{
 			name:          "Empty Response Body",
 			responseXML:   "",
 			expectError:   true,
-			errorContains: "xml parsing error",
+			errorContains: apperrors.ErrXMLParsing,
 		},
 	}
 

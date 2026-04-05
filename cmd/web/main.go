@@ -7,14 +7,17 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
 	satAdapter "github.com/1rene0lguin/sat-reconciler/internal/adapters/sat"
+	"github.com/1rene0lguin/sat-reconciler/internal/apperrors"
 	"github.com/1rene0lguin/sat-reconciler/internal/core/domain"
 	"github.com/1rene0lguin/sat-reconciler/internal/core/services"
+	"github.com/1rene0lguin/sat-reconciler/internal/logger"
 )
 
 // --- Constants (CamelCase) ---
@@ -145,6 +148,10 @@ type PageData struct {
 // --- Entry Point ---
 
 func main() {
+	// Initialize structured JSON logger
+	logLevel := os.Getenv("LOG_LEVEL")
+	logger.Setup(logLevel)
+
 	if err := setupTempDir(); err != nil {
 		log.Fatalf("Error creando directorio temporal: %v", err)
 	}
@@ -184,8 +191,12 @@ func setupRoutes(mux *http.ServeMux, service *services.ConciliatorService) {
 
 func startServer(mux *http.ServeMux) {
 	port := getServerPort()
-	fmt.Printf("🐺 Irene Olguin - SAT Reconciler Web v1.0\n")
-	fmt.Printf("🚀 Servidor corriendo en http://localhost:%s\n", port)
+	slog.Info("Server starting",
+		slog.String("app", "SAT Reconciler Web"),
+		slog.String("version", "v1.0"),
+		slog.String("port", port),
+		slog.String("url", "http://localhost:"+port),
+	)
 
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatal(err)
@@ -251,7 +262,10 @@ func makeExecuteRequestHandler(service *services.ConciliatorService) http.Handle
 		// Call service to create request
 		uuid, err := service.RequestMetadata(rfc, startDate, endDate, downloadType, certPath, keyPath, password)
 		if err != nil {
-			fmt.Printf("Service Error: %v\n", err)
+			slog.Error("Service error",
+				slog.String("handler", "ExecuteRequest"),
+				slog.String("error", err.Error()),
+			)
 			fmt.Fprintf(w, `<div class="p-4 bg-red-100 text-red-700 rounded border border-red-400">❌ Error al enviar solicitud al SAT: %s</div>`, err.Error())
 			return
 		}
@@ -310,7 +324,10 @@ func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFu
 		// Verify status with SAT
 		result, err := service.CheckStatus(rfc, uuid, certPath, keyPath, password)
 		if err != nil {
-			fmt.Printf("Service Error: %v\n", err)
+			slog.Error("Service error",
+				slog.String("handler", "CheckStatus"),
+				slog.String("error", err.Error()),
+			)
 			fmt.Fprintf(w, `<div class="p-4 bg-red-100 text-red-700 rounded border border-red-400">❌ Error consultando al SAT: %s</div>`, err.Error())
 			return
 		}
@@ -325,9 +342,11 @@ func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFu
 		// If finished
 		if len(result.PackageIDs) == 0 {
 			statusText := "Solicitud terminada pero no hay paquetes disponibles"
-			fmt.Printf("Result.Status: %d\n", result.Status)
-			fmt.Printf("Result.Message: %s\n", result.Message)
-			fmt.Printf("Result.PackageIDs: %v\n", result.PackageIDs)
+			slog.Debug("Verification result: no packages",
+				slog.Int("status", int(result.Status)),
+				slog.String("message", result.Message),
+				slog.Int("package_count", len(result.PackageIDs)),
+			)
 			fmt.Fprintf(w, htmlStatusInProgress, statusText, uuid)
 			return
 		}
@@ -380,7 +399,10 @@ func makeVerifyAndDownloadHandler(service *services.ConciliatorService) http.Han
 		// 1. Verify status with SAT
 		result, err := service.CheckStatus(rfc, uuid, certPath, keyPath, password)
 		if err != nil {
-			fmt.Printf("Service Error: %v\n", err)
+			slog.Error("Service error",
+				slog.String("handler", "VerifyAndDownload"),
+				slog.String("error", err.Error()),
+			)
 			http.Error(w, msgInvalidService, http.StatusInternalServerError)
 			return
 		}
@@ -405,7 +427,11 @@ func makeVerifyAndDownloadHandler(service *services.ConciliatorService) http.Han
 			zipBytes, err := service.DownloadPackage(rfc, pkgID, certPath, keyPath, password)
 			if err != nil {
 				// Log error but continue with other packages
-				fmt.Printf("Error downloading package %s: %v\n", pkgID, err)
+				slog.Error("Package download failed",
+					slog.String("handler", "VerifyAndDownload"),
+					slog.String("package_id", pkgID),
+					slog.String("error", err.Error()),
+				)
 				continue
 			}
 			packages[pkgID] = zipBytes
@@ -440,11 +466,17 @@ func makeVerifyAndDownloadHandler(service *services.ConciliatorService) http.Han
 		w.Header().Set(headerContentType, contentTypeZip)
 		w.Header().Set(headerContentDisp, fmt.Sprintf(contentDispAtt, uuid))
 		if _, err := w.Write(finalZip); err != nil {
-			fmt.Printf("Error writing zip: %v\n", err)
+			slog.Error("ZIP write error",
+				slog.String("handler", "VerifyAndDownload"),
+				slog.String("error", err.Error()),
+			)
 		}
 
 		// 9. Log success (credentials already destroyed by defer)
-		fmt.Printf("✅ Downloaded %d package(s) for UUID %s - FIEL credentials destroyed\n", len(packages), uuid)
+		slog.Info("Download complete",
+			slog.Int("packages", len(packages)),
+			slog.String("uuid", uuid),
+		)
 	}
 }
 
@@ -458,17 +490,17 @@ func bundlePackages(packages map[string][]byte) ([]byte, error) {
 		fileName := fmt.Sprintf("%s.zip", pkgID)
 		writer, err := zipWriter.Create(fileName)
 		if err != nil {
-			return nil, fmt.Errorf("error creating zip entry: %w", err)
+			return nil, apperrors.Wrap(apperrors.ErrZipEntry, err)
 		}
 
 		// Write the package ZIP content
 		if _, err := writer.Write(zipBytes); err != nil {
-			return nil, fmt.Errorf("error writing zip content: %w", err)
+			return nil, apperrors.Wrap(apperrors.ErrZipContent, err)
 		}
 	}
 
 	if err := zipWriter.Close(); err != nil {
-		return nil, fmt.Errorf("error closing zip writer: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrZipClose, err)
 	}
 
 	return buf.Bytes(), nil
@@ -492,7 +524,10 @@ func render(w http.ResponseWriter, templatePath string, data PageData) {
 		return
 	}
 	if err := ts.ExecuteTemplate(w, "layout", data); err != nil {
-		fmt.Printf("Error renderizando template: %v\n", err)
+		slog.Error("Template render error",
+			slog.String("template", templatePath),
+			slog.String("error", err.Error()),
+		)
 	}
 }
 

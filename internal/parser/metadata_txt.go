@@ -2,13 +2,13 @@ package parser
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/1rene0lguin/sat-reconciler/internal/adapters/sat"
+	"github.com/1rene0lguin/sat-reconciler/internal/apperrors"
 )
 
 // ParseMetadataTxt procesa el archivo .txt separado por ~ del SAT.
@@ -36,7 +36,7 @@ func ParseMetadataTxt(reader io.Reader) ([]sat.Metadata, error) {
 			if lineCount == 1 {
 				continue
 			}
-			return nil, fmt.Errorf("malformed line %d: %d fields found", lineCount, len(fields))
+			return nil, apperrors.New(apperrors.ErrMalformedLine, apperrors.P("line", lineCount), apperrors.P("fields", len(fields)))
 		}
 
 		// Detect and skip header if exists
