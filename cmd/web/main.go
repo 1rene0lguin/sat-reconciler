@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	satAdapter "github.com/1rene0lguin/sat-reconciler/internal/adapters/sat"
 	"github.com/1rene0lguin/sat-reconciler/internal/core/domain"
@@ -283,7 +284,7 @@ func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFu
 		}
 
 		rfc := r.FormValue(fieldRFC)
-		uuid := r.FormValue(fieldUUID)
+		uuid := strings.TrimSpace(strings.TrimPrefix(r.FormValue(fieldUUID), "UUID:"))
 		password := r.FormValue(fieldPass)
 
 		// Save FIEL files temporarily
@@ -324,7 +325,9 @@ func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFu
 		// If finished
 		if len(result.PackageIDs) == 0 {
 			statusText := "Solicitud terminada pero no hay paquetes disponibles"
-			fmt.Printf("Result: %v\n", result)
+			fmt.Printf("Result.Status: %d\n", result.Status)
+			fmt.Printf("Result.Message: %s\n", result.Message)
+			fmt.Printf("Result.PackageIDs: %v\n", result.PackageIDs)
 			fmt.Fprintf(w, htmlStatusInProgress, statusText, uuid)
 			return
 		}
@@ -351,7 +354,7 @@ func makeVerifyAndDownloadHandler(service *services.ConciliatorService) http.Han
 		}
 
 		rfc := r.FormValue(fieldRFC)
-		uuid := r.FormValue(fieldUUID)
+		uuid := strings.TrimSpace(strings.TrimPrefix(r.FormValue(fieldUUID), "UUID:"))
 		password := r.FormValue(fieldPass)
 
 		// Save FIEL files temporarily

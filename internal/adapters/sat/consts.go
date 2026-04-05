@@ -9,8 +9,8 @@ const (
 	actionSolicitudRecibidos = "http://DescargaMasivaTerceros.sat.gob.mx/ISolicitaDescargaService/SolicitaDescargaRecibidos"
 	urlVerifica      = "https://cfdidescargamasivasolicitud.clouda.sat.gob.mx/VerificaSolicitudDescargaService.svc"
 	actionVerifica   = "http://DescargaMasivaTerceros.sat.gob.mx/IVerificaSolicitudDescargaService/VerificaSolicitudDescarga"
-	urlDescarga      = "https://cfdidescargamasiva.clouda.sat.gob.mx/PeticionDescargaMasiva/PeticionDescargaMasiva.svc"
-	actionDescarga   = "http://DescargaMasivaTerceros.sat.gob.mx/IPeticionDescargaMasivaService/PeticionDescargaMasiva"
+	urlDescarga      = "https://cfdidescargamasiva.clouda.sat.gob.mx/DescargaMasivaService.svc"
+	actionDescarga   = "http://DescargaMasivaTerceros.sat.gob.mx/IDescargaMasivaTercerosService/Descargar"
 
 	// Namespaces & Formats
 	dateTimeFormat = "2006-01-02T15:04:05.000Z"

@@ -58,11 +58,11 @@ func (s *SoapAdapter) processDownloadResponse(body io.Reader) ([]byte, error) {
 		return nil, fmt.Errorf("xml parsing error: %w", err)
 	}
 
-	if err := s.validateSatStatus(envelope.Body.Response.Header.CodeStatus, envelope.Body.Response.Header.Message); err != nil {
+	if err := s.validateSatStatus(envelope.Header.Respuesta.CodeStatus, envelope.Header.Respuesta.Message); err != nil {
 		return nil, err
 	}
 
-	return base64.StdEncoding.DecodeString(envelope.Body.Response.Body.PackageBase64)
+	return base64.StdEncoding.DecodeString(envelope.Body.Response.PackageBase64)
 }
 
 func (s *SoapAdapter) validateSatStatus(code, message string) error {
@@ -126,6 +126,8 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath, password string)
 	if err != nil {
 		return nil, fmt.Errorf("request creation error: %w", err)
 	}
+
+	fmt.Printf("XML: %s\n", string(xmlBytes))
 
 	s.setHeaders(req, actionVerifica, token)
 
@@ -356,7 +358,17 @@ func (s *SoapAdapter) DownloadPackage(rfc, packageID, certPath, keyPath, passwor
 	}
 	defer resp.Body.Close()
 
-	return s.processDownloadResponse(resp.Body)
+	// Read the full body for debugging and parsing
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response error: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP error: %d - %s", resp.StatusCode, string(respBytes))
+	}
+
+	return s.processDownloadResponse(bytes.NewReader(respBytes))
 }
 
 func (s *SoapAdapter) authenticate(certPath, keyPath, password string) (string, error) {

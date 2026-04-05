@@ -1,7 +1,7 @@
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:des="http://DescargaMasivaTerceros.sat.gob.mx">
     <soapenv:Header/>
     <soapenv:Body>
-        <des:PeticionDescargaMasiva>
+        <des:PeticionDescargaMasivaTercerosEntrada>
             <des:peticionDescarga IdPaquete="{{.PackageID}}" RfcSolicitante="{{.RfcSolicitant}}">
                 <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
                     <SignedInfo>
@@ -27,6 +27,6 @@
                     </KeyInfo>
                 </Signature>
             </des:peticionDescarga>
-        </des:PeticionDescargaMasiva>
+        </des:PeticionDescargaMasivaTercerosEntrada>
     </soapenv:Body>
 </soapenv:Envelope>
