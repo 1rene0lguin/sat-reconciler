@@ -3,12 +3,13 @@ package sat
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"math"
 	"math/rand"
 	"net/http"
 	"time"
+
+	"github.com/1rene0lguin/sat-reconciler/internal/apperrors"
 )
 
 // RetryConfig holds retry behavior configuration
@@ -68,7 +69,7 @@ func (s *SoapAdapter) doRequestWithRetry(ctx context.Context, req *http.Request,
 		if attempt > 0 && req.GetBody != nil {
 			body, err := req.GetBody()
 			if err != nil {
-				return nil, fmt.Errorf("failed to reproduce request body for retry: %w", err)
+				return nil, apperrors.Wrap(apperrors.ErrRetryBodyReprod, err)
 			}
 			req.Body = body
 		}
@@ -90,8 +91,8 @@ func (s *SoapAdapter) doRequestWithRetry(ctx context.Context, req *http.Request,
 			// Create error from status code if err is nil
 			if lastErr == nil && statusCode != http.StatusOK {
 				bodyBytes, _ := io.ReadAll(resp.Body)
-				lastErr = fmt.Errorf("HTTP %d - %s", statusCode, string(bodyBytes))
-				
+				lastErr = apperrors.New(apperrors.ErrHTTPError, apperrors.P("status_code", statusCode), apperrors.P("body", string(bodyBytes)))
+
 				// Re-create the body in case the caller wants to read it later
 				resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			}
@@ -136,7 +137,7 @@ func (s *SoapAdapter) doRequestWithRetry(ctx context.Context, req *http.Request,
 
 	// All retries exhausted
 	if lastErr != nil {
-		return nil, fmt.Errorf("request failed after %d retries: %w", s.config.MaxRetries, lastErr)
+		return nil, apperrors.Wrap(apperrors.ErrRetryExhausted, lastErr, apperrors.P("max_retries", s.config.MaxRetries))
 	}
 
 	return resp, nil

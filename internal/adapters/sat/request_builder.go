@@ -9,13 +9,13 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
-	"errors"
 	"fmt"
-	
-	"github.com/youmark/pkcs8"
 	"os"
 	"text/template"
 	"time"
+
+	"github.com/1rene0lguin/sat-reconciler/internal/apperrors"
+	"github.com/youmark/pkcs8"
 )
 
 const (
@@ -126,7 +126,7 @@ func (a *RequestBuilder) BuildVerificationRequest(rfc, requestID string) ([]byte
 func loadPrivateKey(path, password string) (*rsa.PrivateKey, error) {
 	keyBytes, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("error leyendo key: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrReadingKey, err)
 	}
 
 	var keyData []byte
@@ -146,9 +146,9 @@ func loadPrivateKey(path, password string) (*rsa.PrivateKey, error) {
 			if ok {
 				return rsaKey, nil
 			}
-			return nil, errors.New("la llave encriptada no es RSA")
+			return nil, apperrors.New(apperrors.ErrEncryptedKeyNotRSA)
 		} else {
-			return nil, fmt.Errorf("contraseña incorrecta o fallo al desencriptar la llave: %w", err)
+			return nil, apperrors.Wrap(apperrors.ErrDecryptKey, err)
 		}
 	}
 
@@ -158,12 +158,12 @@ func loadPrivateKey(path, password string) (*rsa.PrivateKey, error) {
 
 	key8, err := x509.ParsePKCS8PrivateKey(keyData)
 	if err != nil {
-		return nil, fmt.Errorf("formato de llave no soportado o contraseña incorrecta: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrUnsupportedKeyFmt, err)
 	}
 
 	rsaKey, ok := key8.(*rsa.PrivateKey)
 	if !ok {
-		return nil, errors.New("la llave no es RSA")
+		return nil, apperrors.New(apperrors.ErrKeyNotRSA)
 	}
 
 	return rsaKey, nil
@@ -172,7 +172,7 @@ func loadPrivateKey(path, password string) (*rsa.PrivateKey, error) {
 func loadCertificate(path string) (*x509.Certificate, error) {
 	cerBytes, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("error leyendo cer: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrReadingCert, err)
 	}
 
 	block, _ := pem.Decode(cerBytes)
@@ -206,7 +206,7 @@ func (a *RequestBuilder) buildXML(tmplName, canonicalString string, params *Soap
 
 	var finalXML bytes.Buffer
 	if err := a.templates.ExecuteTemplate(&finalXML, tmplName, params); err != nil {
-		return nil, fmt.Errorf("error renderizando template %s: %w", tmplName, err)
+		return nil, apperrors.Wrap(apperrors.ErrRenderTemplate, err, apperrors.P("template", tmplName))
 	}
 
 	return finalXML.Bytes(), nil
@@ -226,7 +226,7 @@ func (rb *RequestBuilder) computeSignature(canonicalString string) (digest, sign
 
 	sigBytes, err := rsa.SignPKCS1v15(rand.Reader, rb.privateKey, crypto.SHA1, signedInfoHash)
 	if err != nil {
-		return "", "", fmt.Errorf("error signing RSA: %w", err)
+		return "", "", apperrors.Wrap(apperrors.ErrSignRSA, err)
 	}
 
 	return digest, base64.StdEncoding.EncodeToString(sigBytes), nil
@@ -245,7 +245,7 @@ func (rb *RequestBuilder) computeAuthSignature(canonicalString string) (digest, 
 
 	sigBytes, err := rsa.SignPKCS1v15(rand.Reader, rb.privateKey, crypto.SHA1, signedInfoHash)
 	if err != nil {
-		return "", "", fmt.Errorf("error signing auth RSA: %w", err)
+		return "", "", apperrors.Wrap(apperrors.ErrSignAuthRSA, err)
 	}
 
 	return digest, base64.StdEncoding.EncodeToString(sigBytes), nil
@@ -270,7 +270,7 @@ func (rb *RequestBuilder) BuildDownloadRequest(rfc, packageID string) ([]byte, e
 
 	var finalXML bytes.Buffer
 	if err := rb.templates.ExecuteTemplate(&finalXML, templateNameDescarga, params); err != nil {
-		return nil, fmt.Errorf("error rendering download template: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrRenderTemplate, err, apperrors.P("template", templateNameDescarga))
 	}
 
 	return finalXML.Bytes(), nil
@@ -307,7 +307,7 @@ func (rb *RequestBuilder) renderTemplate(tmplName string, data any) ([]byte, err
 	var buffer bytes.Buffer
 
 	if err := rb.templates.ExecuteTemplate(&buffer, tmplName, data); err != nil {
-		return nil, fmt.Errorf("error renderizando template %s: %w", tmplName, err)
+		return nil, apperrors.Wrap(apperrors.ErrRenderTemplate, err, apperrors.P("template", tmplName))
 	}
 
 	return buffer.Bytes(), nil

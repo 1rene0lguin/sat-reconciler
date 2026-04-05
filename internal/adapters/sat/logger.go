@@ -82,7 +82,7 @@ func logCacheMiss(logger *slog.Logger, operation string, uuid string) {
 }
 
 // withTimeout wraps an operation with logging and timeout
-func withTimeout(ctx context.Context, timeout time.Duration, operation string, fn func(context.Context) error) error {
+func withTimeout(ctx context.Context, logger *slog.Logger, timeout time.Duration, operation string, fn func(context.Context) error) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -91,7 +91,7 @@ func withTimeout(ctx context.Context, timeout time.Duration, operation string, f
 	duration := time.Since(start)
 
 	if err == context.DeadlineExceeded {
-		slog.Error("Operation timeout",
+		logger.Error("Operation timeout",
 			slog.String("operation", operation),
 			slog.Duration("timeout", timeout),
 			slog.Duration("elapsed", duration),
