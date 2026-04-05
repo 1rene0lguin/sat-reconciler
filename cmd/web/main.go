@@ -324,6 +324,7 @@ func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFu
 		// If finished
 		if len(result.PackageIDs) == 0 {
 			statusText := "Solicitud terminada pero no hay paquetes disponibles"
+			fmt.Printf("Result: %v\n", result)
 			fmt.Fprintf(w, htmlStatusInProgress, statusText, uuid)
 			return
 		}
