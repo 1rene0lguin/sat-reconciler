@@ -2,10 +2,11 @@ package sat
 
 const (
 	// SOAP Actions & URLs
-	actionAutentica  = "http://DescargaMasivaTerceros.sat.gob.mx/IAutenticacion/Autentica"
+	actionAutentica  = "http://DescargaMasivaTerceros.gob.mx/IAutenticacion/Autentica"
 	urlAutenticacion = "https://cfdidescargamasivasolicitud.clouda.sat.gob.mx/Autenticacion/Autenticacion.svc"
-	urlSolicitud     = "https://cfdidescargamasivasolicitud.clouda.sat.gob.mx/SolicitaDescargaService.svc"
-	actionSolicitud  = "http://DescargaMasivaTerceros.sat.gob.mx/ISolicitaDescargaService/SolicitaDescarga"
+	urlSolicitud             = "https://cfdidescargamasivasolicitud.clouda.sat.gob.mx/SolicitaDescargaService.svc"
+	actionSolicitudEmitidos  = "http://DescargaMasivaTerceros.sat.gob.mx/ISolicitaDescargaService/SolicitaDescargaEmitidos"
+	actionSolicitudRecibidos = "http://DescargaMasivaTerceros.sat.gob.mx/ISolicitaDescargaService/SolicitaDescargaRecibidos"
 	urlVerifica      = "https://cfdidescargamasivasolicitud.clouda.sat.gob.mx/VerificaSolicitudDescargaService.svc"
 	actionVerifica   = "http://DescargaMasivaTerceros.sat.gob.mx/IVerificaSolicitudDescargaService/VerificaSolicitudDescarga"
 	urlDescarga      = "https://cfdidescargamasiva.clouda.sat.gob.mx/PeticionDescargaMasiva/PeticionDescargaMasiva.svc"

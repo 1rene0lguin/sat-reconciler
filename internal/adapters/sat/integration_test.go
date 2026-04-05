@@ -61,12 +61,18 @@ func TestIntegrationSATErrorCodes(t *testing.T) {
 
 			mockTripper := &MockRoundTripper{
 				RoundTripFunc: func(req *http.Request) *http.Response {
+					if req.URL.String() == urlAutenticacion {
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Body:       io.NopCloser(bytes.NewBufferString(`<s:Envelope><s:Body><AutenticaResponse><AutenticaResult>TOKEN</AutenticaResult></AutenticaResponse></s:Body></s:Envelope>`)),
+						}
+					}
 					responseXML := `
 					<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
 						<s:Body>
-							<SolicitaDescargaResponse xmlns="http://DescargaMasivaTerceros.sat.gob.mx">
-								<SolicitaDescargaResult IdSolicitud="` + tt.uuidInResp + `" CodEstatus="` + tt.satErrorCode + `" Mensaje="` + tt.satMessage + `"/>
-							</SolicitaDescargaResponse>
+							<SolicitaDescargaRecibidosResponse xmlns="http://DescargaMasivaTerceros.sat.gob.mx">
+								<SolicitaDescargaRecibidosResult IdSolicitud="` + tt.uuidInResp + `" CodEstatus="` + tt.satErrorCode + `" Mensaje="` + tt.satMessage + `"/>
+							</SolicitaDescargaRecibidosResponse>
 						</s:Body>
 					</s:Envelope>`
 					return &http.Response{
@@ -81,7 +87,7 @@ func TestIntegrationSATErrorCodes(t *testing.T) {
 			adapter.client.Transport = mockTripper
 
 			// ACT
-			_, err := adapter.RequestMetadata("RFC", "2024-01-01T00:00:00", "2024-01-31T23:59:59", certPath, keyPath)
+			_, err := adapter.RequestMetadata("RFC", "2024-01-01T00:00:00", "2024-01-31T23:59:59", "Recibidos", certPath, keyPath, "")
 
 			// ASSERT
 			if tt.expectError {
@@ -141,6 +147,12 @@ func TestIntegrationNetworkErrors(t *testing.T) {
 
 			mockTripper := &MockRoundTripper{
 				RoundTripFunc: func(req *http.Request) *http.Response {
+					if req.URL.String() == urlAutenticacion {
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Body:       io.NopCloser(bytes.NewBufferString(`<s:Envelope><s:Body><AutenticaResponse><AutenticaResult>TOKEN</AutenticaResult></AutenticaResponse></s:Body></s:Envelope>`)),
+						}
+					}
 					return &http.Response{
 						StatusCode: tt.httpStatus,
 						Body:       io.NopCloser(bytes.NewBufferString(tt.responseBody)),
@@ -153,7 +165,7 @@ func TestIntegrationNetworkErrors(t *testing.T) {
 			adapter.client.Transport = mockTripper
 
 			// ACT
-			_, err := adapter.RequestMetadata("RFC", "2024-01-01T00:00:00", "2024-01-31T23:59:59", certPath, keyPath)
+			_, err := adapter.RequestMetadata("RFC", "2024-01-01T00:00:00", "2024-01-31T23:59:59", "Recibidos", certPath, keyPath, "")
 
 			// ASSERT
 			if tt.expectError {
@@ -212,6 +224,12 @@ func TestIntegrationMalformedResponses(t *testing.T) {
 
 			mockTripper := &MockRoundTripper{
 				RoundTripFunc: func(req *http.Request) *http.Response {
+					if req.URL.String() == urlAutenticacion {
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Body:       io.NopCloser(bytes.NewBufferString(`<s:Envelope><s:Body><AutenticaResponse><AutenticaResult>TOKEN</AutenticaResult></AutenticaResponse></s:Body></s:Envelope>`)),
+						}
+					}
 					return &http.Response{
 						StatusCode: http.StatusOK,
 						Body:       io.NopCloser(bytes.NewBufferString(tt.responseXML)),
@@ -224,7 +242,7 @@ func TestIntegrationMalformedResponses(t *testing.T) {
 			adapter.client.Transport = mockTripper
 
 			// ACT
-			_, err := adapter.RequestMetadata("RFC", "2024-01-01T00:00:00", "2024-01-31T23:59:59", certPath, keyPath)
+			_, err := adapter.RequestMetadata("RFC", "2024-01-01T00:00:00", "2024-01-31T23:59:59", "Recibidos", certPath, keyPath, "")
 
 			// ASSERT
 			if tt.expectError {

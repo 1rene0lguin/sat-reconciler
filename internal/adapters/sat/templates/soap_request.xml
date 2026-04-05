@@ -1,8 +1,9 @@
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:des="http://DescargaMasivaTerceros.sat.gob.mx">
     <soapenv:Header/>
     <soapenv:Body>
-        <des:SolicitaDescarga>
-            <des:solicitud FechaInicio="{{.DateStart}}" FechaFin="{{.DateEnd}}" RfcEmisor="{{.RfcIssuer}}" RfcReceptor="{{.RfcReceiver}}" RfcSolicitante="{{.RfcSolicitant}}" TipoSolicitud="{{.TypeRequest}}">
+        {{- if eq .DownloadType "Recibidos"}}
+        <des:SolicitaDescargaRecibidos>
+            <des:solicitud FechaFinal="{{.DateEnd}}" FechaInicial="{{.DateStart}}" RfcReceptor="{{.RfcSolicitant}}" RfcSolicitante="{{.RfcSolicitant}}" TipoSolicitud="{{.TypeRequest}}">
                 <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
                     <SignedInfo>
                         <CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
@@ -27,6 +28,35 @@
                     </KeyInfo>
                 </Signature>
             </des:solicitud>
-        </des:SolicitaDescarga>
+        </des:SolicitaDescargaRecibidos>
+        {{- else}}
+        <des:SolicitaDescargaEmitidos>
+            <des:solicitud FechaFinal="{{.DateEnd}}" FechaInicial="{{.DateStart}}" RfcEmisor="{{.RfcSolicitant}}" RfcSolicitante="{{.RfcSolicitant}}" TipoSolicitud="{{.TypeRequest}}">
+                <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+                    <SignedInfo>
+                        <CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+                        <SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+                        <Reference URI="">
+                            <Transforms>
+                                <Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+                            </Transforms>
+                            <DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+                            <DigestValue>{{.DigestValue}}</DigestValue>
+                        </Reference>
+                    </SignedInfo>
+                    <SignatureValue>{{.SignatureValue}}</SignatureValue>
+                    <KeyInfo>
+                        <X509Data>
+                            <X509IssuerSerial>
+                                <X509IssuerName>{{.IssuerName}}</X509IssuerName>
+                                <X509SerialNumber>{{.SerialNumber}}</X509SerialNumber>
+                            </X509IssuerSerial>
+                            <X509Certificate>{{.Certificate}}</X509Certificate>
+                        </X509Data>
+                    </KeyInfo>
+                </Signature>
+            </des:solicitud>
+        </des:SolicitaDescargaEmitidos>
+        {{- end}}
     </soapenv:Body>
 </soapenv:Envelope>

@@ -11,6 +11,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	
+	"github.com/youmark/pkcs8"
 	"os"
 	"text/template"
 	"time"
@@ -25,10 +27,12 @@ const (
 	templateNameSolicitud = "soap_request.xml"
 	templateNameVerifica  = "verify_request.xml"
 
-	canonicalSolicitudFmt = `<des:solicitud xmlns:des="http://DescargaMasivaTerceros.sat.gob.mx" FechaFin="%s" FechaInicio="%s" RfcEmisor="%s" RfcReceptor="%s" RfcSolicitante="%s" TipoSolicitud="%s"></des:solicitud>`
+	canonicalSolicitudEmitidosFmt = `<des:solicitud xmlns:des="http://DescargaMasivaTerceros.sat.gob.mx" FechaFinal="%s" FechaInicial="%s" RfcEmisor="%s" RfcSolicitante="%s" TipoSolicitud="%s"></des:solicitud>`
+	canonicalSolicitudRecibidosFmt = `<des:solicitud xmlns:des="http://DescargaMasivaTerceros.sat.gob.mx" FechaFinal="%s" FechaInicial="%s" RfcReceptor="%s" RfcSolicitante="%s" TipoSolicitud="%s"></des:solicitud>`
 	canonicalVerificaFmt  = `<des:solicitud xmlns:des="http://DescargaMasivaTerceros.sat.gob.mx" IdSolicitud="%s" RfcSolicitante="%s"></des:solicitud>`
 
 	signedInfoFmt = `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></CanonicalizationMethod><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"></SignatureMethod><Reference URI=""><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"></Transform></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"></DigestMethod><DigestValue>%s</DigestValue></Reference></SignedInfo>`
+	signedInfoAuthFmt = `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"></CanonicalizationMethod><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"></SignatureMethod><Reference URI="#_0"><Transforms><Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"></Transform></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"></DigestMethod><DigestValue>%s</DigestValue></Reference></SignedInfo>`
 
 	templateNameDescarga = "download_request.xml"
 	canonicalDescargaFmt = `<des:peticionDescarga xmlns:des="http://DescargaMasivaTerceros.sat.gob.mx" IdPaquete="%s" RfcSolicitante="%s"></des:peticionDescarga>`
@@ -41,6 +45,7 @@ type SoapRequestParams struct {
 	TypeRequest    string
 	RfcIssuer      string
 	RfcReceiver    string
+	DownloadType   string
 	DigestValue    string
 	SignatureValue string
 	Certificate    string
@@ -65,8 +70,8 @@ type RequestBuilder struct {
 	templates  *template.Template
 }
 
-func NewRequestBuilder(keyPath, cerPath string) (*RequestBuilder, error) {
-	privKey, err := loadPrivateKey(keyPath)
+func NewRequestBuilder(keyPath, cerPath, password string) (*RequestBuilder, error) {
+	privKey, err := loadPrivateKey(keyPath, password)
 	if err != nil {
 		return nil, err
 	}
@@ -89,10 +94,18 @@ func NewRequestBuilder(keyPath, cerPath string) (*RequestBuilder, error) {
 }
 
 func (a *RequestBuilder) BuildSignedRequest(params SoapRequestParams) ([]byte, error) {
-	canonicalString := fmt.Sprintf(
-		canonicalSolicitudFmt,
-		params.DateEnd, params.DateStart, params.RfcIssuer, params.RfcReceiver, params.RfcSolicitant, params.TypeRequest,
-	)
+	var canonicalString string
+	if params.DownloadType == "Recibidos" {
+		canonicalString = fmt.Sprintf(
+			canonicalSolicitudRecibidosFmt,
+			params.DateEnd, params.DateStart, params.RfcSolicitant, params.RfcSolicitant, params.TypeRequest,
+		)
+	} else {
+		canonicalString = fmt.Sprintf(
+			canonicalSolicitudEmitidosFmt,
+			params.DateEnd, params.DateStart, params.RfcSolicitant, params.RfcSolicitant, params.TypeRequest,
+		)
+	}
 
 	return a.buildXML(templateNameSolicitud, canonicalString, &params)
 }
@@ -110,22 +123,40 @@ func (a *RequestBuilder) BuildVerificationRequest(rfc, requestID string) ([]byte
 
 // --- Private Helper Functions ---
 
-func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
+func loadPrivateKey(path, password string) (*rsa.PrivateKey, error) {
 	keyBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("error leyendo key: %w", err)
 	}
 
+	var keyData []byte
 	block, _ := pem.Decode(keyBytes)
-	if block == nil {
-		return nil, errors.New("no se encontró bloque PEM en la llave privada")
+	if block != nil {
+		// La llave está en formato de text/base64 PEM
+		keyData = block.Bytes
+	} else {
+		// Si no se encuentra un bloque PEM, asumimos que los bytes están crudos en formato
+		// DER (binario), que es el formato que suele utilizar el SAT por defecto para .key y .cer
+		keyData = keyBytes
 	}
 
-	if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+	if password != "" {
+		if key, err := pkcs8.ParsePKCS8PrivateKey(keyData, []byte(password)); err == nil {
+			rsaKey, ok := key.(*rsa.PrivateKey)
+			if ok {
+				return rsaKey, nil
+			}
+			return nil, errors.New("la llave encriptada no es RSA")
+		} else {
+			return nil, fmt.Errorf("contraseña incorrecta o fallo al desencriptar la llave: %w", err)
+		}
+	}
+
+	if key, err := x509.ParsePKCS1PrivateKey(keyData); err == nil {
 		return key, nil
 	}
 
-	key8, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	key8, err := x509.ParsePKCS8PrivateKey(keyData)
 	if err != nil {
 		return nil, fmt.Errorf("formato de llave no soportado o contraseña incorrecta: %w", err)
 	}
@@ -200,7 +231,25 @@ func (rb *RequestBuilder) computeSignature(canonicalString string) (digest, sign
 
 	return digest, base64.StdEncoding.EncodeToString(sigBytes), nil
 }
+func (rb *RequestBuilder) computeAuthSignature(canonicalString string) (digest, signature string, err error) {
+	h := sha1.New()
+	h.Write([]byte(canonicalString))
+	digestBytes := h.Sum(nil)
+	digest = base64.StdEncoding.EncodeToString(digestBytes)
 
+	signedInfo := fmt.Sprintf(signedInfoAuthFmt, digest)
+
+	sh := sha1.New()
+	sh.Write([]byte(signedInfo))
+	signedInfoHash := sh.Sum(nil)
+
+	sigBytes, err := rsa.SignPKCS1v15(rand.Reader, rb.privateKey, crypto.SHA1, signedInfoHash)
+	if err != nil {
+		return "", "", fmt.Errorf("error signing auth RSA: %w", err)
+	}
+
+	return digest, base64.StdEncoding.EncodeToString(sigBytes), nil
+}
 func (rb *RequestBuilder) BuildDownloadRequest(rfc, packageID string) ([]byte, error) {
 	canonicalString := fmt.Sprintf(canonicalDescargaFmt, packageID, rfc)
 
@@ -235,8 +284,8 @@ func (rb *RequestBuilder) BuildAuthRequest() ([]byte, error) {
 	// 1. Canonicalización del Timestamp (Lo que realmente firma el SAT en Auth)
 	canonicalTimestamp := fmt.Sprintf(envAutenticaFmt, created, expires)
 
-	// 2. Firmar
-	digest, signature, err := rb.computeSignature(canonicalTimestamp)
+	// 2. Firmar con Autentica SignedInfo spec
+	digest, signature, err := rb.computeAuthSignature(canonicalTimestamp)
 	if err != nil {
 		return nil, err
 	}

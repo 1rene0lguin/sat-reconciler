@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/1rene0lguin/sat-reconciler/internal/core/domain"
@@ -37,9 +38,10 @@ func NewSoapAdapterWithConfig(config AdapterConfig) *SoapAdapter {
 	}
 }
 
-func (s *SoapAdapter) setHeaders(req *http.Request, token string) {
+func (s *SoapAdapter) setHeaders(req *http.Request, action, token string) {
 	req.Header.Set(headerContentType, mimeTypeXML)
-	req.Header.Set("SOAPAction", actionDescarga)
+	// Some WCF configurations require quotes around SOAPAction
+	req.Header.Set("SOAPAction", `"`+action+`"`)
 	if token != "" {
 		req.Header.Set(headerAuth, authPrefix+token+authSuffix)
 	}
@@ -86,7 +88,7 @@ type DescargaResponseEnvelope struct {
 	} `xml:"Body"`
 }
 
-func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.VerificationResult, error) {
+func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath, password string) (*domain.VerificationResult, error) {
 	// Check cache first
 	if cachedResult, found := s.cache.Get(rfc, uuid); found {
 		logCacheHit(s.config.Logger, "CheckStatus", uuid)
@@ -94,7 +96,12 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.
 	}
 	logCacheMiss(s.config.Logger, "CheckStatus", uuid)
 
-	rb, err := NewRequestBuilder(keyPath, certPath)
+	token, err := s.authenticate(certPath, keyPath, password)
+	if err != nil {
+		return nil, fmt.Errorf("authentication failed: %w", err)
+	}
+
+	rb, err := NewRequestBuilder(keyPath, certPath, password)
 	if err != nil {
 		return nil, fmt.Errorf("error iniciando builder: %w", err)
 	}
@@ -111,13 +118,12 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.
 	}
 
 	// Send HTTP POST to SAT
-	req, err := http.NewRequest(http.MethodPost, urlVerifica, bytes.NewBuffer(xmlBytes))
+	req, err := http.NewRequest(http.MethodPost, urlVerifica, bytes.NewReader(xmlBytes))
 	if err != nil {
 		return nil, fmt.Errorf("request creation error: %w", err)
 	}
 
-	req.Header.Set(headerContentType, mimeTypeXML)
-	req.Header.Set("SOAPAction", actionVerifica)
+	s.setHeaders(req, actionVerifica, token)
 
 	// Log request
 	logHTTPRequest(s.config.Logger, "CheckStatus", urlVerifica, uuid)
@@ -193,10 +199,27 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath string) (*domain.
 	return verification, nil
 }
 
-func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string) (string, error) {
-	rb, err := NewRequestBuilder(keyPath, certPath)
+func (s *SoapAdapter) RequestMetadata(rfc, start, end, downloadType, certPath, keyPath, password string) (string, error) {
+	token, err := s.authenticate(certPath, keyPath, password)
+	if err != nil {
+		return "", fmt.Errorf("authentication failed: %w", err)
+	}
+
+	rb, err := NewRequestBuilder(keyPath, certPath, password)
 	if err != nil {
 		return "", fmt.Errorf("error iniciando builder: %w", err)
+	}
+
+	// Sanitizar RFC
+	rfc = strings.ToUpper(strings.TrimSpace(rfc))
+
+	// El SAT requiere que el formato XML contenga segundos explícitos: "2006-01-02T15:04:05"
+	// Si el HTML5 datetime-local envía "YYYY-MM-DDTHH:MM", le anexamos los segundos
+	if len(start) == 16 {
+		start += ":00"
+	}
+	if len(end) == 16 {
+		end += ":00"
 	}
 
 	params := SoapRequestParams{
@@ -204,6 +227,7 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string)
 		DateStart:     start,
 		DateEnd:       end,
 		TypeRequest:   "Metadata", // Business Rule: MVP only downloads Metadata
+		DownloadType:  downloadType,
 	}
 
 	// Build signed XML
@@ -219,13 +243,17 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string)
 	}
 
 	// Send HTTP POST to SAT
-	req, err := http.NewRequest(http.MethodPost, urlSolicitud, bytes.NewBuffer(xmlBytes))
+	req, err := http.NewRequest(http.MethodPost, urlSolicitud, bytes.NewReader(xmlBytes))
 	if err != nil {
 		return "", fmt.Errorf("request creation error: %w", err)
 	}
 
-	req.Header.Set(headerContentType, mimeTypeXML)
-	req.Header.Set("SOAPAction", actionSolicitud)
+	action := actionSolicitudEmitidos
+	if downloadType == "Recibidos" {
+		action = actionSolicitudRecibidos
+	}
+
+	s.setHeaders(req, action, token)
 
 	// Log request
 	logHTTPRequest(s.config.Logger, "RequestMetadata", urlSolicitud, "new-request")
@@ -265,7 +293,14 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string)
 		return "", fmt.Errorf("xml parsing error: %w", err)
 	}
 
-	result := envelope.Body.Response.Result
+	var result *RequestResult
+	if envelope.Body.ResponseEmitidos != nil && envelope.Body.ResponseEmitidos.ResultEmitidos != nil {
+		result = envelope.Body.ResponseEmitidos.ResultEmitidos
+	} else if envelope.Body.ResponseRecibidos != nil && envelope.Body.ResponseRecibidos.ResultRecibidos != nil {
+		result = envelope.Body.ResponseRecibidos.ResultRecibidos
+	} else {
+		return "", fmt.Errorf("sat error: estructura de respuesta XML irreconocible")
+	}
 
 	// Validate SAT status
 	if err := s.validateSatStatus(result.CodeStatus, result.Message); err != nil {
@@ -279,13 +314,13 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, certPath, keyPath string)
 
 	return result.IDSolicitud, nil
 }
-func (s *SoapAdapter) DownloadPackage(rfc, packageID, certPath, keyPath string) ([]byte, error) {
-	token, err := s.authenticate(certPath, keyPath)
+func (s *SoapAdapter) DownloadPackage(rfc, packageID, certPath, keyPath, password string) ([]byte, error) {
+	token, err := s.authenticate(certPath, keyPath, password)
 	if err != nil {
 		return nil, fmt.Errorf("authentication failed: %w", err)
 	}
 
-	rb, err := NewRequestBuilder(keyPath, certPath)
+	rb, err := NewRequestBuilder(keyPath, certPath, password)
 	if err != nil {
 		return nil, fmt.Errorf("builder initialization error: %w", err)
 	}
@@ -295,12 +330,12 @@ func (s *SoapAdapter) DownloadPackage(rfc, packageID, certPath, keyPath string) 
 		return nil, fmt.Errorf("xml generation error: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, urlDescarga, bytes.NewBuffer(xmlPayload))
+	req, err := http.NewRequest(http.MethodPost, urlDescarga, bytes.NewReader(xmlPayload))
 	if err != nil {
 		return nil, fmt.Errorf("request creation error: %w", err)
 	}
 
-	s.setHeaders(req, token)
+	s.setHeaders(req, actionDescarga, token)
 
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -311,8 +346,8 @@ func (s *SoapAdapter) DownloadPackage(rfc, packageID, certPath, keyPath string) 
 	return s.processDownloadResponse(resp.Body)
 }
 
-func (s *SoapAdapter) authenticate(certPath, keyPath string) (string, error) {
-	rb, err := NewRequestBuilder(keyPath, certPath)
+func (s *SoapAdapter) authenticate(certPath, keyPath, password string) (string, error) {
+	rb, err := NewRequestBuilder(keyPath, certPath, password)
 	if err != nil {
 		return "", err
 	}
@@ -334,7 +369,7 @@ func (s *SoapAdapter) doAuthRequest(xmlPayload []byte) (string, error) {
 
 	// Headers requeridos por el SAT [cite: 35, 36]
 	req.Header.Set(headerContentType, mimeTypeXML)
-	req.Header.Set("SOAPAction", actionAutentica)
+	req.Header.Set("SOAPAction", `"`+actionAutentica+`"`)
 
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -343,7 +378,8 @@ func (s *SoapAdapter) doAuthRequest(xmlPayload []byte) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("error HTTP en autenticación: %d", resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("error HTTP en autenticación: %d - %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	// El SAT devuelve el token dentro del XML de respuesta (AutenticaResult).

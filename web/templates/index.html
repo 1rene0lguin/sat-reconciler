@@ -246,13 +246,41 @@
                                 <input type="text" name="rfc" placeholder="XAXX010101000"
                                     class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-sat-500 outline-none uppercase font-mono tracking-wider">
                             </div>
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Tipo
-                                    Solicitud</label>
-                                <select name="tipo_solicitud"
-                                    class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-sat-500 outline-none">
-                                    <option value="Metadata">Metadata (Txt ~)</option>
-                                </select>
+                            <div class="col-span-1 md:col-span-2">
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-3">¿Qué comprobantes deseas descargar?</label>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <label class="relative flex cursor-pointer rounded-lg border border-slate-700 bg-slate-900/50 p-4 hover:bg-slate-800 transition-all focus-within:ring-2 focus-within:ring-sat-500">
+                                        <input type="radio" name="download_type" value="Emitidos" class="sr-only">
+                                        <div class="flex items-center gap-3">
+                                            <div class="flex h-5 w-5 items-center justify-center rounded-full border border-slate-600 bg-slate-950/50">
+                                                <div class="h-2.5 w-2.5 rounded-full bg-sat-500 opacity-0 transition-opacity"></div>
+                                            </div>
+                                            <div>
+                                                <p class="text-sm font-bold text-white">Emitidos</p>
+                                                <p class="text-xs text-slate-400">Facturas que tú enviaste</p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                    <label class="relative flex cursor-pointer rounded-lg border border-sat-500/50 bg-sat-500/10 p-4 hover:bg-slate-800 transition-all focus-within:ring-2 focus-within:ring-sat-500">
+                                        <!-- Checked by default via JS or just check it here -->
+                                        <input type="radio" name="download_type" value="Recibidos" checked class="sr-only">
+                                        <div class="flex items-center gap-3">
+                                            <div class="flex h-5 w-5 items-center justify-center rounded-full border border-sat-500 bg-sat-500/20">
+                                                <div class="h-2.5 w-2.5 rounded-full bg-sat-500 opacity-100 transition-opacity"></div>
+                                            </div>
+                                            <div>
+                                                <p class="text-sm font-bold text-white">Recibidos</p>
+                                                <p class="text-xs text-slate-400">Facturas de tus proveedores</p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                                <style>
+                                    input[type=radio]:checked + div > div:first-child { border-color: #0ea5e9; background-color: rgba(14,165,233,0.2); }
+                                    input[type=radio]:checked + div > div:first-child > div { opacity: 1; }
+                                    input[type=radio]:checked ~ div { border-color: rgba(14,165,233,0.5); }
+                                    label:has(input[type=radio]:checked) { border-color: rgba(14,165,233,0.5); background-color: rgba(14,165,233,0.1); }
+                                </style>
                             </div>
                         </div>
 

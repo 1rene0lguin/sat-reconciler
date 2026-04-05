@@ -85,6 +85,21 @@ func generateTestKeys(t *testing.T) (string, string) {
 	return keyFile.Name(), certFile.Name()
 }
 
+func generateInvalidTestKey(t *testing.T) string {
+	t.Helper()
+	var invalidKeyFile, err = os.CreateTemp("", "invalid-key-*.key")
+	if err != nil {
+		t.Fatalf("Failed to create invalid key file: %v", err)
+	}
+	defer invalidKeyFile.Close()
+
+	_, err = invalidKeyFile.Write([]byte("texto que no es una llave ni pem ni der"))
+	if err != nil {
+		t.Fatalf("Failed to write to invalid key file: %v", err)
+	}
+	return invalidKeyFile.Name()
+}
+
 func TestNewRequestBuilder_AAA(t *testing.T) {
 	keyPath, certPath := generateTestKeys(t)
 	defer os.Remove(keyPath)
@@ -114,6 +129,12 @@ func TestNewRequestBuilder_AAA(t *testing.T) {
 			certPath:  "invalid/path/cert.cer",
 			wantError: true,
 		},
+		{
+			name:      "Edge Case - Invalid Key Format",
+			keyPath:   generateInvalidTestKey(t),
+			certPath:  certPath,
+			wantError: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -121,7 +142,7 @@ func TestNewRequestBuilder_AAA(t *testing.T) {
 			cwd, _ := os.Getwd()
 			t.Logf("Current Working Directory: %s", cwd)
 			// ACT
-			rb, err := NewRequestBuilder(tt.keyPath, tt.certPath)
+			rb, err := NewRequestBuilder(tt.keyPath, tt.certPath, "")
 
 			// ASSERT
 			if tt.wantError {
@@ -146,7 +167,7 @@ func TestBuildSignedRequest_AAA(t *testing.T) {
 	defer os.Remove(keyPath)
 	defer os.Remove(certPath)
 
-	rb, err := NewRequestBuilder(keyPath, certPath)
+	rb, err := NewRequestBuilder(keyPath, certPath, "")
 	if err != nil {
 		t.Fatalf("Failed to create RequestBuilder: %v", err)
 	}
@@ -173,7 +194,7 @@ func TestBuildSignedRequest_AAA(t *testing.T) {
 	// Validamos que contenga elementos clave
 	expectedTags := []string{
 		"des:solicitud",
-		"FechaInicio=\"2023-01-01T00:00:00\"",
+		"FechaInicial=\"2023-01-01T00:00:00\"",
 		"RfcSolicitante=\"TEST010101TST\"",
 		"<SignatureValue>",
 		"<DigestValue>",
@@ -194,7 +215,7 @@ func TestBuildVerificationRequest_AAA(t *testing.T) {
 	defer os.Remove(keyPath)
 	defer os.Remove(certPath)
 
-	rb, err := NewRequestBuilder(keyPath, certPath)
+	rb, err := NewRequestBuilder(keyPath, certPath, "")
 	if err != nil {
 		t.Fatalf("Failed to create RequestBuilder: %v", err)
 	}
@@ -223,7 +244,7 @@ func TestBuildDownloadRequest_AAA(t *testing.T) {
 	defer os.Remove(keyPath)
 	defer os.Remove(certPath)
 
-	rb, err := NewRequestBuilder(keyPath, certPath)
+	rb, err := NewRequestBuilder(keyPath, certPath, "")
 	if err != nil {
 		t.Fatalf("Failed to create RequestBuilder: %v", err)
 	}
@@ -257,7 +278,7 @@ func TestBuildAuthRequest_AAA(t *testing.T) {
 	defer os.Remove(keyPath)
 	defer os.Remove(certPath)
 
-	rb, err := NewRequestBuilder(keyPath, certPath)
+	rb, err := NewRequestBuilder(keyPath, certPath, "")
 	if err != nil {
 		t.Fatalf("Failed to create RequestBuilder: %v", err)
 	}
@@ -284,5 +305,54 @@ func TestBuildAuthRequest_AAA(t *testing.T) {
 	}
 	if !strings.Contains(xmlStr, "<SignatureValue>") {
 		t.Error("XML missing SignatureValue")
+	}
+}
+
+// TestDebugLoadRealCertificate es una prueba auxiliar diseñada específicamente
+// para que puedas poner un breakpoint (F9 en VSCode) dentro de loadCertificate,
+// asignar la ruta real de tu archivo .cer y debuggear por qué falla pem.Decode o el parseo.
+func TestDebugLoadRealCertificate(t *testing.T) {
+	// Reemplaza "" con la ruta absoluta a tu archivo .cer real.
+	// Por ejemplo: "C:/Users/01029/Documents/portfolio/sat-reconciler/mi_certificado.cer"
+	cerPath := ""
+
+	if cerPath == "" {
+		t.Skip("Saltando prueba de debug: no se proporcionó una ruta de certificado. Llena la variable cerPath.")
+	}
+
+	if _, err := os.Stat(cerPath); os.IsNotExist(err) {
+		t.Fatalf("No se encontró el archivo: %s", cerPath)
+	}
+
+	// Pon el Breakpoint en la función loadCertificate (internal/adapters/sat/request_builder.go)
+	cert, err := loadCertificate(cerPath)
+	if err != nil {
+		t.Fatalf("Fallo en loadCertificate: %v", err)
+	}
+
+	t.Logf("Certificado cargado exitosamente. Subject: %s", cert.Subject)
+}
+
+// TestDebugLoadRealPrivateKey funciona igual que el anterior, pero para depurar loadPrivateKey.
+func TestDebugLoadRealPrivateKey(t *testing.T) {
+	// Reemplaza "" con la ruta absoluta a tu archivo de llave (.key o .pem)
+	keyPath := ""
+
+	if keyPath == "" {
+		t.Skip("Saltando prueba de debug: no se proporcionó una ruta de llave privada. Llena la variable keyPath.")
+	}
+
+	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+		t.Fatalf("No se encontró el archivo: %s", keyPath)
+	}
+
+	// Pon el Breakpoint en la función loadPrivateKey (internal/adapters/sat/request_builder.go)
+	key, err := loadPrivateKey(keyPath, "")
+	if err != nil {
+		t.Fatalf("Fallo en loadPrivateKey: %v", err)
+	}
+
+	if key != nil {
+		t.Log("Llave privada cargada exitosamente.")
 	}
 }

@@ -9,21 +9,21 @@ import (
 
 // MockSatGateway simula al SAT para no depender de internet en los tests
 type MockSatGateway struct {
-	RequestMetadataFunc func(rfc, start, end, c, k string) (string, error)
-	CheckStatusFunc     func(rfc, uuid, c, k string) (*domain.VerificationResult, error)
-	DownloadPackageFunc func(rfc, id, c, k string) ([]byte, error)
+	RequestMetadataFunc func(rfc, start, end, downloadType, c, k, p string) (string, error)
+	CheckStatusFunc     func(rfc, uuid, c, k, p string) (*domain.VerificationResult, error)
+	DownloadPackageFunc func(rfc, id, c, k, p string) ([]byte, error)
 }
 
-func (m *MockSatGateway) RequestMetadata(rfc, start, end, c, k string) (string, error) {
+func (m *MockSatGateway) RequestMetadata(rfc, start, end, downloadType, c, k, p string) (string, error) {
 	if m.RequestMetadataFunc != nil {
-		return m.RequestMetadataFunc(rfc, start, end, c, k)
+		return m.RequestMetadataFunc(rfc, start, end, downloadType, c, k, p)
 	}
 	return "UUID-TEST-123", nil
 }
 
-func (m *MockSatGateway) CheckStatus(rfc, uuid, c, k string) (*domain.VerificationResult, error) {
+func (m *MockSatGateway) CheckStatus(rfc, uuid, c, k, p string) (*domain.VerificationResult, error) {
 	if m.CheckStatusFunc != nil {
-		return m.CheckStatusFunc(rfc, uuid, c, k)
+		return m.CheckStatusFunc(rfc, uuid, c, k, p)
 	}
 	// Default behavior
 	return &domain.VerificationResult{
@@ -34,9 +34,9 @@ func (m *MockSatGateway) CheckStatus(rfc, uuid, c, k string) (*domain.Verificati
 	}, nil
 }
 
-func (m *MockSatGateway) DownloadPackage(rfc, id, c, k string) ([]byte, error) {
+func (m *MockSatGateway) DownloadPackage(rfc, id, c, k, p string) ([]byte, error) {
 	if m.DownloadPackageFunc != nil {
-		return m.DownloadPackageFunc(rfc, id, c, k)
+		return m.DownloadPackageFunc(rfc, id, c, k, p)
 	}
 	return []byte("CONTENIDO-ZIP-MOCK"), nil
 }
@@ -47,7 +47,7 @@ func TestVerifyRequest_FinishedStatus(t *testing.T) {
 	service := services.NewConciliatorService(mockGateway)
 
 	// 2. Act
-	result, err := service.VerifyRequest("RFC123", "UUID-TEST", "dummy.cer", "dummy.key")
+	result, err := service.VerifyRequest("RFC123", "UUID-TEST", "dummy.cer", "dummy.key", "")
 
 	// 3. Assert
 	if err != nil {
@@ -61,7 +61,7 @@ func TestVerifyRequest_FinishedStatus(t *testing.T) {
 func TestVerifyRequest_InProcessStatus(t *testing.T) {
 	// 1. Arrange
 	mockGateway := &MockSatGateway{
-		CheckStatusFunc: func(rfc, uuid, c, k string) (*domain.VerificationResult, error) {
+		CheckStatusFunc: func(rfc, uuid, c, k, p string) (*domain.VerificationResult, error) {
 			return &domain.VerificationResult{
 				UUID:    uuid,
 				Status:  domain.StatusInProcess,
@@ -72,7 +72,7 @@ func TestVerifyRequest_InProcessStatus(t *testing.T) {
 	service := services.NewConciliatorService(mockGateway)
 
 	// 2. Act
-	result, err := service.VerifyRequest("RFC", "UUID", "c", "k")
+	result, err := service.VerifyRequest("RFC", "UUID", "c", "k", "")
 
 	// 3. Assert
 	if err != nil {
@@ -86,7 +86,7 @@ func TestVerifyRequest_InProcessStatus(t *testing.T) {
 func TestVerifyRequest_ErrorStatus(t *testing.T) {
 	// 1. Arrange
 	mockGateway := &MockSatGateway{
-		CheckStatusFunc: func(rfc, uuid, c, k string) (*domain.VerificationResult, error) {
+		CheckStatusFunc: func(rfc, uuid, c, k, p string) (*domain.VerificationResult, error) {
 			return &domain.VerificationResult{
 				UUID:    uuid,
 				Status:  domain.StatusError,
@@ -97,7 +97,7 @@ func TestVerifyRequest_ErrorStatus(t *testing.T) {
 	service := services.NewConciliatorService(mockGateway)
 
 	// 2. Act
-	result, err := service.VerifyRequest("RFC", "UUID", "c", "k")
+	result, err := service.VerifyRequest("RFC", "UUID", "c", "k", "")
 
 	// 3. Assert
 	if err != nil {
@@ -112,14 +112,14 @@ func TestDownloadPackage(t *testing.T) {
 	// 1. Arrange
 	expectedData := []byte("DATA")
 	mockGateway := &MockSatGateway{
-		DownloadPackageFunc: func(rfc, id, c, k string) ([]byte, error) {
+		DownloadPackageFunc: func(rfc, id, c, k, p string) ([]byte, error) {
 			return expectedData, nil
 		},
 	}
 	service := services.NewConciliatorService(mockGateway)
 
 	// 2. Act
-	data, err := service.DownloadPackage("RFC", "PKG-1", "c", "k")
+	data, err := service.DownloadPackage("RFC", "PKG-1", "c", "k", "")
 
 	// 3. Assert
 	if err != nil {
@@ -133,14 +133,14 @@ func TestDownloadPackage(t *testing.T) {
 func TestCheckStatus(t *testing.T) {
 	// 1. Arrange
 	mockGateway := &MockSatGateway{
-		CheckStatusFunc: func(rfc, uuid, c, k string) (*domain.VerificationResult, error) {
+		CheckStatusFunc: func(rfc, uuid, c, k, p string) (*domain.VerificationResult, error) {
 			return &domain.VerificationResult{Status: domain.StatusRejected}, nil
 		},
 	}
 	service := services.NewConciliatorService(mockGateway)
 
 	// 2. Act
-	res, err := service.CheckStatus("RFC", "UUID", "c", "k")
+	res, err := service.CheckStatus("RFC", "UUID", "c", "k", "")
 
 	// 3. Assert
 	if err != nil {

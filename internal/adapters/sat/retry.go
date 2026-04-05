@@ -1,8 +1,10 @@
 package sat
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"net/http"
@@ -63,6 +65,14 @@ func (s *SoapAdapter) doRequestWithRetry(ctx context.Context, req *http.Request,
 	for attempt := 0; attempt <= s.config.MaxRetries; attempt++ {
 		start := time.Now()
 
+		if attempt > 0 && req.GetBody != nil {
+			body, err := req.GetBody()
+			if err != nil {
+				return nil, fmt.Errorf("failed to reproduce request body for retry: %w", err)
+			}
+			req.Body = body
+		}
+
 		// Perform request
 		resp, lastErr = s.client.Do(req)
 		duration := time.Since(start)
@@ -79,7 +89,11 @@ func (s *SoapAdapter) doRequestWithRetry(ctx context.Context, req *http.Request,
 			statusCode = resp.StatusCode
 			// Create error from status code if err is nil
 			if lastErr == nil && statusCode != http.StatusOK {
-				lastErr = fmt.Errorf("HTTP %d", statusCode)
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				lastErr = fmt.Errorf("HTTP %d - %s", statusCode, string(bodyBytes))
+				
+				// Re-create the body in case the caller wants to read it later
+				resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			}
 		}
 		logHTTPResponse(s.config.Logger, operation, uuid, statusCode, duration, lastErr)

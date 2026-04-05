@@ -45,6 +45,7 @@ const (
 	fieldCerReq    = "cer"
 	fieldKeyReq    = "key"
 	fieldPassReq   = "password"
+	fieldDownload  = "download_type"
 
 	// Form Fields - Check Status
 	fieldRFC  = "rfc_verify"
@@ -219,7 +220,12 @@ func makeExecuteRequestHandler(service *services.ConciliatorService) http.Handle
 		rfc := r.FormValue(fieldRFCReq)
 		startDate := r.FormValue(fieldStartDate)
 		endDate := r.FormValue(fieldEndDate)
-		// password := r.FormValue(fieldPassReq) // TODO: Use for key decryption
+		password := r.FormValue(fieldPassReq)
+		downloadType := r.FormValue(fieldDownload)
+
+		if downloadType == "" {
+			downloadType = "Recibidos" // Default
+		}
 
 		// Save FIEL files temporarily
 		certPath, cleanupCert, err := saveTempFile(r, fieldCerReq)
@@ -242,7 +248,7 @@ func makeExecuteRequestHandler(service *services.ConciliatorService) http.Handle
 		}()
 
 		// Call service to create request
-		uuid, err := service.RequestMetadata(rfc, startDate, endDate, certPath, keyPath)
+		uuid, err := service.RequestMetadata(rfc, startDate, endDate, downloadType, certPath, keyPath, password)
 		if err != nil {
 			fmt.Printf("Service Error: %v\n", err)
 			fmt.Fprintf(w, `<div class="p-4 bg-red-100 text-red-700 rounded border border-red-400">❌ Error al enviar solicitud al SAT: %s</div>`, err.Error())
@@ -278,7 +284,7 @@ func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFu
 
 		rfc := r.FormValue(fieldRFC)
 		uuid := r.FormValue(fieldUUID)
-		// password := r.FormValue(fieldPass) // TODO: Use for key decryption
+		password := r.FormValue(fieldPass)
 
 		// Save FIEL files temporarily
 		certPath, cleanupCert, err := saveTempFile(r, fieldCer)
@@ -301,7 +307,7 @@ func makeCheckStatusHandler(service *services.ConciliatorService) http.HandlerFu
 		}()
 
 		// Verify status with SAT
-		result, err := service.CheckStatus(rfc, uuid, certPath, keyPath)
+		result, err := service.CheckStatus(rfc, uuid, certPath, keyPath, password)
 		if err != nil {
 			fmt.Printf("Service Error: %v\n", err)
 			fmt.Fprintf(w, `<div class="p-4 bg-red-100 text-red-700 rounded border border-red-400">❌ Error consultando al SAT: %s</div>`, err.Error())
@@ -345,6 +351,7 @@ func makeVerifyAndDownloadHandler(service *services.ConciliatorService) http.Han
 
 		rfc := r.FormValue(fieldRFC)
 		uuid := r.FormValue(fieldUUID)
+		password := r.FormValue(fieldPass)
 
 		// Save FIEL files temporarily
 		certPath, cleanupCert, err := saveTempFile(r, fieldCer)
@@ -367,7 +374,7 @@ func makeVerifyAndDownloadHandler(service *services.ConciliatorService) http.Han
 		}()
 
 		// 1. Verify status with SAT
-		result, err := service.CheckStatus(rfc, uuid, certPath, keyPath)
+		result, err := service.CheckStatus(rfc, uuid, certPath, keyPath, password)
 		if err != nil {
 			fmt.Printf("Service Error: %v\n", err)
 			http.Error(w, msgInvalidService, http.StatusInternalServerError)
@@ -391,7 +398,7 @@ func makeVerifyAndDownloadHandler(service *services.ConciliatorService) http.Han
 		// 4. Download ALL packages immediately (atomic operation)
 		packages := make(map[string][]byte)
 		for _, pkgID := range result.PackageIDs {
-			zipBytes, err := service.DownloadPackage(rfc, pkgID, certPath, keyPath)
+			zipBytes, err := service.DownloadPackage(rfc, pkgID, certPath, keyPath, password)
 			if err != nil {
 				// Log error but continue with other packages
 				fmt.Printf("Error downloading package %s: %v\n", pkgID, err)

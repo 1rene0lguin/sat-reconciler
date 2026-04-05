@@ -25,8 +25,8 @@ func NewConciliatorService(gateway ports.SatGateway) *ConciliatorService {
 	}
 }
 
-func (s *ConciliatorService) VerifyRequest(rfc, uuid, cert, key string) (string, error) {
-	result, err := s.satGateway.CheckStatus(rfc, uuid, cert, key)
+func (s *ConciliatorService) VerifyRequest(rfc, uuid, cert, key, password string) (string, error) {
+	result, err := s.satGateway.CheckStatus(rfc, uuid, cert, key, password)
 	if err != nil {
 		return "", err
 	}
@@ -47,14 +47,14 @@ func (s *ConciliatorService) VerifyRequest(rfc, uuid, cert, key string) (string,
 	return fmt.Sprintf(msgStatusFormat, result.Status, result.Message), nil
 }
 
-func (s *ConciliatorService) RequestMetadata(rfc, start, end, certPath, keyPath string) (string, error) {
-	return s.satGateway.RequestMetadata(rfc, start, end, certPath, keyPath)
+func (s *ConciliatorService) RequestMetadata(rfc, start, end, downloadType, certPath, keyPath, password string) (string, error) {
+	return s.satGateway.RequestMetadata(rfc, start, end, downloadType, certPath, keyPath, password)
 }
 
-func (s *ConciliatorService) DownloadPackage(rfc, pkgID, cert, key string) ([]byte, error) {
-	return s.satGateway.DownloadPackage(rfc, pkgID, cert, key)
+func (s *ConciliatorService) DownloadPackage(rfc, pkgID, cert, key, password string) ([]byte, error) {
+	return s.satGateway.DownloadPackage(rfc, pkgID, cert, key, password)
 }
 
-func (s *ConciliatorService) CheckStatus(rfc, uuid, cert, key string) (*domain.VerificationResult, error) {
-	return s.satGateway.CheckStatus(rfc, uuid, cert, key)
+func (s *ConciliatorService) CheckStatus(rfc, uuid, cert, key, password string) (*domain.VerificationResult, error) {
+	return s.satGateway.CheckStatus(rfc, uuid, cert, key, password)
 }

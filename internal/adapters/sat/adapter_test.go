@@ -87,7 +87,7 @@ func TestDownloadPackage_AAA(t *testing.T) {
 	adapter.client.Transport = mockTripper // Inject Mock Transport
 
 	// ACT
-	content, err := adapter.DownloadPackage("RFC", "PKG-1", certPath, keyPath)
+	content, err := adapter.DownloadPackage("RFC", "PKG-1", certPath, keyPath, "")
 
 	// ASSERT
 	if err != nil {
@@ -108,14 +108,20 @@ func TestRequestMetadata_AAA(t *testing.T) {
 	// Mock HTTP Client
 	mockTripper := &MockRoundTripper{
 		RoundTripFunc: func(req *http.Request) *http.Response {
+			if req.URL.String() == urlAutenticacion {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(`<s:Envelope><s:Body><AutenticaResponse><AutenticaResult>TOKEN</AutenticaResult></AutenticaResponse></s:Body></s:Envelope>`)),
+				}
+			}
 			if req.URL.String() == urlSolicitud {
 				// Successful response with UUID
 				responseXML := `
 				<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
 					<s:Body>
-						<SolicitaDescargaResponse xmlns="http://DescargaMasivaTerceros.sat.gob.mx">
-							<SolicitaDescargaResult IdSolicitud="12345-ABCDE-67890" CodEstatus="5000" Mensaje="Solicitud Aceptada"/>
-						</SolicitaDescargaResponse>
+						<SolicitaDescargaRecibidosResponse xmlns="http://DescargaMasivaTerceros.sat.gob.mx">
+							<SolicitaDescargaRecibidosResult IdSolicitud="12345-ABCDE-67890" CodEstatus="5000" Mensaje="Solicitud Aceptada"/>
+						</SolicitaDescargaRecibidosResponse>
 					</s:Body>
 				</s:Envelope>`
 				return &http.Response{
@@ -135,7 +141,7 @@ func TestRequestMetadata_AAA(t *testing.T) {
 	adapter.client.Transport = mockTripper // Inject Mock Transport
 
 	// ACT
-	uuid, err := adapter.RequestMetadata("RFC", "2024-01-01T00:00:00", "2024-01-31T23:59:59", certPath, keyPath)
+	uuid, err := adapter.RequestMetadata("RFC", "2024-01-01T00:00:00", "2024-01-31T23:59:59", "Recibidos", certPath, keyPath, "")
 
 	// ASSERT
 	if err != nil {
@@ -155,6 +161,12 @@ func TestCheckStatus_AAA(t *testing.T) {
 	// Mock HTTP Client
 	mockTripper := &MockRoundTripper{
 		RoundTripFunc: func(req *http.Request) *http.Response {
+			if req.URL.String() == urlAutenticacion {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(`<s:Envelope><s:Body><AutenticaResponse><AutenticaResult>TOKEN</AutenticaResult></AutenticaResponse></s:Body></s:Envelope>`)),
+				}
+			}
 			if req.URL.String() == urlVerifica {
 				// Successful response with Finished status
 				responseXML := `
@@ -187,7 +199,7 @@ func TestCheckStatus_AAA(t *testing.T) {
 	adapter.client.Transport = mockTripper // Inject Mock Transport
 
 	// ACT
-	res, err := adapter.CheckStatus("RFC123", "TEST-UUID-12345", certPath, keyPath)
+	res, err := adapter.CheckStatus("RFC123", "TEST-UUID-12345", certPath, keyPath, "")
 
 	// ASSERT
 	if err != nil {

@@ -51,11 +51,13 @@ type RequestResponseEnvelope struct {
 }
 
 type RequestResponseBody struct {
-	Response RequestResponse `xml:"SolicitaDescargaResponse"`
+	ResponseEmitidos  *RequestResponse `xml:"SolicitaDescargaEmitidosResponse,omitempty"`
+	ResponseRecibidos *RequestResponse `xml:"SolicitaDescargaRecibidosResponse,omitempty"`
 }
 
 type RequestResponse struct {
-	Result RequestResult `xml:"SolicitaDescargaResult"`
+	ResultEmitidos  *RequestResult `xml:"SolicitaDescargaEmitidosResult,omitempty"`
+	ResultRecibidos *RequestResult `xml:"SolicitaDescargaRecibidosResult,omitempty"`
 }
 
 type RequestResult struct {
