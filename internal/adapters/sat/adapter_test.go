@@ -61,13 +61,13 @@ func TestDownloadPackage_AAA(t *testing.T) {
 				// Base64 de "CONTENIDO_ZIP_MOCK" -> "Q09OVEVOSURPX1pJUF9NT0NL"
 				responseXML := `
 				<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+					<s:Header>
+						<h:respuesta CodEstatus="5000" Mensaje="Solicitud Aceptada" xmlns:h="http://DescargaMasivaTerceros.sat.gob.mx"/>
+					</s:Header>
 					<s:Body>
-						<h:RespuestaDescargaMasivaTercerosSalida xmlns:h="http://DescargaMasivaTerceros.sat.gob.mx">
-							<header codEstatus="5000" mensaje="Solicitud Aceptada"/>
-							<body>
-								<Paquete>Q09OVEVOSURPX1pJUF9NT0NL</Paquete>
-							</body>
-						</h:RespuestaDescargaMasivaTercerosSalida>
+						<RespuestaDescargaMasivaTercerosSalida xmlns="http://DescargaMasivaTerceros.sat.gob.mx">
+							<Paquete>Q09OVEVOSURPX1pJUF9NT0NL</Paquete>
+						</RespuestaDescargaMasivaTercerosSalida>
 					</s:Body>
 				</s:Envelope>`
 				return &http.Response{
@@ -174,10 +174,8 @@ func TestCheckStatus_AAA(t *testing.T) {
 					<s:Body>
 						<VerificaSolicitudDescargaResponse xmlns="http://DescargaMasivaTerceros.sat.gob.mx">
 							<VerificaSolicitudDescargaResult EstadoSolicitud="3" CodigoEstadoSolicitud="5000" Mensaje="Solicitud Terminada" NumeroCFDIs="10">
-								<IdsPaquetes>
-									<string>PKG-001</string>
-									<string>PKG-002</string>
-								</IdsPaquetes>
+								<IdsPaquetes>PKG-001</IdsPaquetes>
+								<IdsPaquetes>PKG-002</IdsPaquetes>
 							</VerificaSolicitudDescargaResult>
 						</VerificaSolicitudDescargaResponse>
 					</s:Body>

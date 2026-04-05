@@ -3,7 +3,17 @@ package sat
 import "time"
 
 type DownloadResponseEnvelope struct {
-	Body DownloadResponseBody `xml:"Body"`
+	Header DownloadSOAPHeader `xml:"Header"`
+	Body   DownloadResponseBody `xml:"Body"`
+}
+
+type DownloadSOAPHeader struct {
+	Respuesta DownloadRespuesta `xml:"respuesta"`
+}
+
+type DownloadRespuesta struct {
+	CodeStatus string `xml:"CodEstatus,attr"`
+	Message    string `xml:"Mensaje,attr"`
 }
 
 type DownloadResponseBody struct {
@@ -11,16 +21,6 @@ type DownloadResponseBody struct {
 }
 
 type DownloadResponse struct {
-	Header DownloadHeader `xml:"header"`
-	Body   DownloadBody   `xml:"body"`
-}
-
-type DownloadHeader struct {
-	CodeStatus string `xml:"codEstatus,attr"`
-	Message    string `xml:"mensaje,attr"`
-}
-
-type DownloadBody struct {
 	PackageBase64 string `xml:"Paquete"` // ZIP encoded in Base64
 }
 
@@ -83,7 +83,7 @@ type VerifyResult struct {
 	CodeStatusRequest string   `xml:"CodigoEstadoSolicitud,attr"` // 5000: Success
 	Message           string   `xml:"Mensaje,attr"`
 	NumberCFDIs       int      `xml:"NumeroCFDIs,attr"`
-	Packages          []string `xml:"IdsPaquetes>string"` // Package IDs for download
+	Packages          []string `xml:"IdsPaquetes"` // Package IDs for download
 }
 
 type VerifyParams struct {
