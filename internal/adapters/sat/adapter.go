@@ -89,6 +89,10 @@ type DescargaResponseEnvelope struct {
 }
 
 func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath, password string) (*domain.VerificationResult, error) {
+	// Sanitize RFC and UUID
+	rfc = strings.ToUpper(strings.TrimSpace(rfc))
+	uuid = strings.TrimSpace(uuid)
+
 	// Check cache first
 	if cachedResult, found := s.cache.Get(rfc, uuid); found {
 		logCacheHit(s.config.Logger, "CheckStatus", uuid)
@@ -166,24 +170,29 @@ func (s *SoapAdapter) CheckStatus(rfc, uuid, certPath, keyPath, password string)
 	result := envelope.Body.Response.Result
 
 	// Validate SAT status
-	if err := s.validateSatStatus(result.CodeStatusRequest, result.Message); err != nil {
+	if err := s.validateSatStatus(result.CodeStatusRequest, result.Message); err != nil && result.CodeStatusRequest != "5004" {
 		logSATError(s.config.Logger, "CheckStatus", uuid, result.CodeStatusRequest, result.Message)
 		return nil, err
 	}
 
 	// Map SAT status to domain status
 	var status domain.RequestStatus
-	switch result.StatusRequest {
-	case 1:
-		status = domain.StatusAccepted
-	case 2:
-		status = domain.StatusInProcess
-	case 3:
+	if result.CodeStatusRequest == "5004" {
+		// 5004 means "No data found". The request is effectively finished with zero results.
 		status = domain.StatusFinished
-	case 5:
-		status = domain.StatusRejected
-	default:
-		status = domain.StatusInProcess
+	} else {
+		switch result.StatusRequest {
+		case 1:
+			status = domain.StatusAccepted
+		case 2:
+			status = domain.StatusInProcess
+		case 3:
+			status = domain.StatusFinished
+		case 5:
+			status = domain.StatusRejected
+		default:
+			status = domain.StatusInProcess
+		}
 	}
 
 	verification := &domain.VerificationResult{
@@ -315,6 +324,10 @@ func (s *SoapAdapter) RequestMetadata(rfc, start, end, downloadType, certPath, k
 	return result.IDSolicitud, nil
 }
 func (s *SoapAdapter) DownloadPackage(rfc, packageID, certPath, keyPath, password string) ([]byte, error) {
+	// Sanitize RFC and PackageID
+	rfc = strings.ToUpper(strings.TrimSpace(rfc))
+	packageID = strings.TrimSpace(packageID)
+
 	token, err := s.authenticate(certPath, keyPath, password)
 	if err != nil {
 		return nil, fmt.Errorf("authentication failed: %w", err)
